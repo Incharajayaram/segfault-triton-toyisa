@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triton-toyisa"
+version = "0.1.0"
+description = "Lower Triton IR to a declaratively described tensor ISA, and register the result as a PyTorch device."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+]
+# The only extra that needs Triton or torch. Kept separate so the test suite
+# runs without either (see docs/team/testing-ci.md S3).
+extract = [
+  "triton==3.7.1",
+  "torch==2.12.1",
+]
+seam = [
+  "torch==2.12.1",
+]
+
+[project.scripts]
+toyisa = "triton_toyisa.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+  "unit: one module in isolation, no upstream needed (T-L1)",
+  "contract: one of the 9 files in specs/001-triton-to-toy-isa/contracts/ (T-L2)",
+  "integration: two or more real stages composed (T-L3)",
+  "e2e: the frozen corpus end to end, coverage and numerical parity (T-L4)",
+  "bench: publishes a number, never gates (T-L5)",
+  "handbuilt: input constructed as a literal in the test",
+  "real: input produced by the real upstream stage",
+  "gpu: needs a real accelerator; never runs in CI",
+  "slow: excluded from the pre-push loop",
+]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "tools", "bench"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/snapshot_fixtures.py" = ["E402"]
+"tests/conftest.py" = ["E402"]
+
+[tool.coverage.run]
+source = ["src/triton_toyisa"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

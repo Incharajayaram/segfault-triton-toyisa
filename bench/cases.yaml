@@ -1,0 +1,75 @@
+# Bench case matrix. T-L5: publishes numbers, never gates a merge.
+#
+# One row per (tier, metric). A row whose callable is not implemented yet is
+# recorded with status "unavailable" and a reason — it is never omitted, so the
+# results table cannot quietly lose a row.
+#
+# Protocol values are normative; do not change them per-run. See
+# docs/team/testing-ci.md S11.
+
+schema: 1
+
+# Fixed everywhere. A benchmark with a moving seed is not a benchmark.
+seed: 24173
+
+# Timing protocol for every duration metric.
+repeats: 5          # median of 5
+warmup: 1           # discarded
+clock: perf_counter_ns
+statistic: median
+
+# The benchmark never runs on a GPU and never compares wall-clock across
+# machines; only within-run structure counts and within-run timings are
+# comparable.
+allow_gpu: false
+
+tiers:
+  - t0_vecadd
+  - t1_matmul
+  - t2_matmul_relu
+  - t3_modulo
+
+metrics:
+  # --- coverage: the headline (§9.1). Boolean first, fraction second. ---
+  - id: fully_lowered
+    unit: bool
+    headline: true
+    formula: "every value-producing op is annotated or provably elided"
+  - id: node_fraction
+    unit: ratio
+    headline: false
+    upper_bound: true
+    formula: "annotated_value_ops / all_value_ops  (gameable; never the headline)"
+  - id: largest_subgraph
+    unit: ratio
+    headline: true
+    formula: "largest connected annotated subgraph / dataflow-relevant graph"
+
+  # --- selection quality: the evidence that the generator decides (§9.2) ---
+  - id: cost_ratio_vs_reference
+    unit: ratio
+    headline: true
+    formula: "selected_total_cost / hand_written_reference_cost"
+  - id: cost_ratio_vs_oracle
+    unit: ratio
+    headline: true
+    formula: "selected_total_cost / min over exhaustively enumerated valid lowerings"
+
+  # --- reduction: informational only (§9.3) ---
+  - id: instruction_count
+    unit: count
+    headline: false
+    formula: "instructions emitted, plus raw ttir op count for context"
+
+  # --- one-time per-kernel-shape cost (§9.5) ---
+  - id: generation_ns
+    unit: ns
+    headline: true
+    statistic: median
+    formula: "median of 5 perf_counter_ns measurements, warm-up discarded"
+
+  # --- numerical parity (§12): the falsifier for precision, not a speed claim ---
+  - id: parity_max_rel_err
+    unit: ratio
+    headline: true
+    formula: "max relative error vs eager reference, compared under the derived tolerance"

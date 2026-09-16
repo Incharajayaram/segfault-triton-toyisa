@@ -1,0 +1,360 @@
+{
+  "intent": {
+    "t0_vecadd": {
+      "expect_access": "structured",
+      "expect_dot": 0,
+      "expect_epilogue_idiom": 0,
+      "expect_fully_lowered": true,
+      "expect_loop": false,
+      "expect_mac_idiom": 0,
+      "purpose": "elementwise only; true-negative control for the MAC and epilogue idioms"
+    },
+    "t1_matmul": {
+      "expect_access": "structured",
+      "expect_dot": 1,
+      "expect_epilogue_idiom": 0,
+      "expect_fully_lowered": true,
+      "expect_loop": true,
+      "expect_mac_idiom": 1,
+      "purpose": "the primary kernel; loop-carried pointers are the hard case"
+    },
+    "t2_matmul_relu": {
+      "expect_access": "structured",
+      "expect_dot": 1,
+      "expect_epilogue_idiom": 1,
+      "expect_fully_lowered": true,
+      "expect_loop": true,
+      "expect_mac_idiom": 1,
+      "purpose": "matmul plus an elementwise epilogue after the accumulator"
+    },
+    "t3_modulo": {
+      "expect_access": "unstructured",
+      "expect_dot": 0,
+      "expect_epilogue_idiom": 0,
+      "expect_fully_lowered": false,
+      "expect_loop": false,
+      "expect_mac_idiom": 0,
+      "purpose": "negative control; modulo addressing must NOT resolve to a structured descriptor"
+    }
+  },
+  "observations": {
+    "t0_vecadd": {
+      "bytes": 2376,
+      "dialects": {
+        "arith": 5,
+        "tt": 15
+      },
+      "funcs": [
+        "vec_add"
+      ],
+      "has_module_wrapper": true,
+      "has_tf32": false,
+      "lines": 51,
+      "loc_defs": 28,
+      "loc_files": [
+        "LOCFILE"
+      ],
+      "loc_names": [
+        "mask",
+        "n",
+        "offs",
+        "out_ptr",
+        "pid",
+        "x",
+        "x_ptr",
+        "y",
+        "y_ptr"
+      ],
+      "loc_uses": 21,
+      "max_region_depth": 2,
+      "multi_result_examples": [],
+      "multi_result_ops": 0,
+      "op_hist": {
+        "arith.addf": 1,
+        "arith.addi": 1,
+        "arith.cmpi": 1,
+        "arith.constant": 1,
+        "arith.muli": 1,
+        "tt.addptr": 3,
+        "tt.func": 1,
+        "tt.get_program_id": 1,
+        "tt.load": 2,
+        "tt.make_range": 1,
+        "tt.return": 1,
+        "tt.splat": 5,
+        "tt.store": 1
+      },
+      "op_vocab": 13,
+      "ops": {
+        "arith.remsi": 0,
+        "scf.for": 0,
+        "scf.yield": 0,
+        "tt.broadcast": 0,
+        "tt.dot": 0,
+        "tt.expand_dims": 0,
+        "tt.get_program_id": 1,
+        "tt.load": 2,
+        "tt.make_range": 1,
+        "tt.return": 1,
+        "tt.splat": 5,
+        "tt.store": 1
+      },
+      "ops_total": 20,
+      "sha256": "b64ea9665450e85506886143b0d8b6479e932d98de1e5a21f7e4c105ef5e377a",
+      "ssa_defs": 17,
+      "ssa_unique": 17
+    },
+    "t1_matmul": {
+      "bytes": 8223,
+      "dialects": {
+        "arith": 23,
+        "scf": 2,
+        "tt": 38
+      },
+      "funcs": [
+        "matmul"
+      ],
+      "has_module_wrapper": true,
+      "has_tf32": true,
+      "lines": 160,
+      "loc_defs": 93,
+      "loc_files": [
+        "LOCFILE"
+      ],
+      "loc_names": [
+        "K",
+        "M",
+        "N",
+        "a",
+        "a_ptr",
+        "a_ptrs",
+        "acc",
+        "b",
+        "b_ptr",
+        "b_ptrs",
+        "c_ptr",
+        "c_ptrs",
+        "pid_m",
+        "pid_n",
+        "rk",
+        "rm",
+        "rn",
+        "sak",
+        "sam",
+        "sbk",
+        "sbn",
+        "scm",
+        "scn"
+      ],
+      "loc_uses": 64,
+      "max_region_depth": 3,
+      "multi_result_examples": [
+        "line56:%acc_25:3"
+      ],
+      "multi_result_ops": 1,
+      "op_hist": {
+        "arith.addi": 6,
+        "arith.constant": 6,
+        "arith.divsi": 1,
+        "arith.muli": 10,
+        "scf.for": 1,
+        "scf.yield": 1,
+        "tt.addptr": 5,
+        "tt.broadcast": 6,
+        "tt.dot": 1,
+        "tt.expand_dims": 4,
+        "tt.func": 1,
+        "tt.get_program_id": 2,
+        "tt.load": 2,
+        "tt.make_range": 2,
+        "tt.return": 1,
+        "tt.splat": 13,
+        "tt.store": 1
+      },
+      "op_vocab": 17,
+      "ops": {
+        "arith.remsi": 0,
+        "scf.for": 1,
+        "scf.yield": 1,
+        "tt.broadcast": 6,
+        "tt.dot": 1,
+        "tt.expand_dims": 4,
+        "tt.get_program_id": 2,
+        "tt.load": 2,
+        "tt.make_range": 2,
+        "tt.return": 1,
+        "tt.splat": 13,
+        "tt.store": 1
+      },
+      "ops_total": 63,
+      "sha256": "c0ce8ee37cdde2f9701e80c7389282f418927d78d1bba5182c552ea12cbbc80b",
+      "ssa_defs": 59,
+      "ssa_unique": 59
+    },
+    "t2_matmul_relu": {
+      "bytes": 9065,
+      "dialects": {
+        "arith": 25,
+        "scf": 2,
+        "tt": 43
+      },
+      "funcs": [
+        "matmul_relu"
+      ],
+      "has_module_wrapper": true,
+      "has_tf32": true,
+      "lines": 174,
+      "loc_defs": 100,
+      "loc_files": [
+        "LOCFILE"
+      ],
+      "loc_names": [
+        "K",
+        "M",
+        "N",
+        "a_ptr",
+        "a_ptrs",
+        "acc",
+        "b_ptr",
+        "b_ptrs",
+        "bias",
+        "bias_ptr",
+        "c_ptr",
+        "c_ptrs",
+        "out",
+        "pid_m",
+        "pid_n",
+        "rk",
+        "rm",
+        "rn",
+        "sak",
+        "sam",
+        "sbk",
+        "sbn",
+        "scm",
+        "scn"
+      ],
+      "loc_uses": 71,
+      "max_region_depth": 3,
+      "multi_result_examples": [
+        "line57:%acc:3"
+      ],
+      "multi_result_ops": 1,
+      "op_hist": {
+        "arith.addf": 1,
+        "arith.addi": 6,
+        "arith.constant": 6,
+        "arith.divsi": 1,
+        "arith.maxnumf": 1,
+        "arith.muli": 10,
+        "scf.for": 1,
+        "scf.yield": 1,
+        "tt.addptr": 6,
+        "tt.broadcast": 7,
+        "tt.dot": 1,
+        "tt.expand_dims": 5,
+        "tt.func": 1,
+        "tt.get_program_id": 2,
+        "tt.load": 3,
+        "tt.make_range": 2,
+        "tt.return": 1,
+        "tt.splat": 14,
+        "tt.store": 1
+      },
+      "op_vocab": 19,
+      "ops": {
+        "arith.remsi": 0,
+        "scf.for": 1,
+        "scf.yield": 1,
+        "tt.broadcast": 7,
+        "tt.dot": 1,
+        "tt.expand_dims": 5,
+        "tt.get_program_id": 2,
+        "tt.load": 3,
+        "tt.make_range": 2,
+        "tt.return": 1,
+        "tt.splat": 14,
+        "tt.store": 1
+      },
+      "ops_total": 70,
+      "sha256": "3afe085c3a69aa6bbd64abbf80ae53666cda4b46abce8079f761efd8006b663e",
+      "ssa_defs": 66,
+      "ssa_unique": 66
+    },
+    "t3_modulo": {
+      "bytes": 3377,
+      "dialects": {
+        "arith": 9,
+        "tt": 20
+      },
+      "funcs": [
+        "modulo_wrap"
+      ],
+      "has_module_wrapper": true,
+      "has_tf32": false,
+      "lines": 67,
+      "loc_defs": 35,
+      "loc_files": [
+        "LOCFILE"
+      ],
+      "loc_names": [
+        "M",
+        "N",
+        "out_ptr",
+        "rm",
+        "stride_om",
+        "stride_on",
+        "stride_xm",
+        "stride_xn",
+        "x",
+        "x_ptr"
+      ],
+      "loc_uses": 30,
+      "max_region_depth": 2,
+      "multi_result_examples": [],
+      "multi_result_ops": 0,
+      "op_hist": {
+        "arith.addi": 3,
+        "arith.constant": 1,
+        "arith.muli": 4,
+        "arith.remsi": 1,
+        "tt.addptr": 2,
+        "tt.broadcast": 4,
+        "tt.expand_dims": 2,
+        "tt.func": 1,
+        "tt.load": 1,
+        "tt.make_range": 1,
+        "tt.return": 1,
+        "tt.splat": 7,
+        "tt.store": 1
+      },
+      "op_vocab": 13,
+      "ops": {
+        "arith.remsi": 1,
+        "scf.for": 0,
+        "scf.yield": 0,
+        "tt.broadcast": 4,
+        "tt.dot": 0,
+        "tt.expand_dims": 2,
+        "tt.get_program_id": 0,
+        "tt.load": 1,
+        "tt.make_range": 1,
+        "tt.return": 1,
+        "tt.splat": 7,
+        "tt.store": 1
+      },
+      "ops_total": 29,
+      "sha256": "967141cbc5d48139ff36d69e620383f5e9532b94e6a4b153bb23b8924ef4977c",
+      "ssa_defs": 26,
+      "ssa_unique": 26
+    }
+  },
+  "provenance": {
+    "generated_utc": "2026-09-16T17:21:40Z",
+    "python": "3.10.12",
+    "torch": "2.9.1+cu128",
+    "triton": "3.5.1",
+    "versions_file": "triton==3.5.1"
+  },
+  "schema": 1
+}

@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+junit.xml
+.venv/
+# LaTeX auxiliaries (methodology-v2.pdf is the artifact and is committed)
+*.aux
+*.log
+*.out
+*.toc
+
+# NOT ignored, deliberately:
+#   bench/results.json  - the published artifact and the baseline for the next run
+#   fixtures/*.ttir     - the canon
+#   fixtures/raw/*.ttir - fixture provenance, absolute paths and all
