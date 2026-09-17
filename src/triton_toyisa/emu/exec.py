@@ -582,12 +582,28 @@ def emulate(
     policy: PrecisionPolicy | None = None,
     *,
     grid: tuple[int, ...] = (0, 0, 0),
+    use_cpp: bool | None = None,
 ) -> dict[str, np.ndarray]:
     """Execute `program` and return every buffer it wrote (postcondition 1).
 
     `UNSUPPORTED` halts locally with :class:`ProgramNotExecutable`; the caller
     routes that kernel to the eager fallback (postcondition 2).
+
+    When `use_cpp` is True (or None and the C++ backend is available), the
+    C++ emulator is used for faster execution. Set `use_cpp=False` to force
+    the pure-Python path.
     """
+    from . import HAS_CPP
+
+    if use_cpp is None:
+        use_cpp = HAS_CPP
+    if use_cpp:
+        try:
+            from ._emu_cpp import emulate as _cpp_emulate
+            return _cpp_emulate(program, inputs, policy, grid)
+        except ImportError:
+            pass  # Fall through to Python path.
+
     markers = program.markers()
     if markers:
         raise ProgramNotExecutable(markers[0])

@@ -14,6 +14,7 @@ junit.xml
 *.log
 *.out
 *.toc
+*.zip
 
 # NOT ignored, deliberately:
 #   bench/results.json  - the published artifact and the baseline for the next run
