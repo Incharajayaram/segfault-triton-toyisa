@@ -144,3 +144,95 @@ def test_loop():
     outputs = emulate(prog, inputs, use_cpp=True)
     assert "Out" in outputs
     np.testing.assert_array_equal(outputs["Out"], np.array([15], dtype=np.float32))
+
+
+def test_program_id():
+    """Test get_program_id with grid parameters in the C++ emulator."""
+    prog = Program(
+        isa_name="toyisa",
+        schema_version=1,
+        inputs=("OutX", "OutY"),
+        instrs=(
+            Instr(
+                name="EPI",
+                operands={"value": Imm(0)},
+                defs=("PIDX",),
+                source_ops=(SourceRef(op_name="tt.get_program_id", line=1),),
+            ),
+            Instr(
+                name="EPI",
+                operands={"value": Imm(1)},
+                defs=("PIDY",),
+                source_ops=(SourceRef(op_name="tt.get_program_id", line=2),),
+            ),
+            Instr(
+                name="DMA1D",
+                operands={"dst": MemRef(space="global", base="OutX"), "value": SsaRef("PIDX")},
+                source_ops=(SourceRef(op_name="tt.store", line=3),),
+            ),
+            Instr(
+                name="DMA1D",
+                operands={"dst": MemRef(space="global", base="OutY"), "value": SsaRef("PIDY")},
+                source_ops=(SourceRef(op_name="tt.store", line=4),),
+            ),
+        ),
+    )
+    inputs = {
+        "OutX": np.array([0], dtype=np.float32),
+        "OutY": np.array([0], dtype=np.float32),
+    }
+
+    # Run with a specific grid
+    outputs = emulate(prog, inputs, grid=(42, 17, 0), use_cpp=True)
+    assert "OutX" in outputs
+    assert "OutY" in outputs
+    np.testing.assert_array_equal(outputs["OutX"], np.array([42], dtype=np.float32))
+    np.testing.assert_array_equal(outputs["OutY"], np.array([17], dtype=np.float32))
+
+    # Python parity
+    outputs_py = emulate(prog, inputs, grid=(42, 17, 0), use_cpp=False)
+    np.testing.assert_array_equal(outputs["OutX"], outputs_py["OutX"])
+    np.testing.assert_array_equal(outputs["OutY"], outputs_py["OutY"])
+
+
+def test_exceptions():
+    """Test that unsupported ops raise UnsupportedInstruction, and markers raise ProgramNotExecutable."""
+    from triton_toyisa.emu._emu_cpp import ProgramNotExecutable, UnsupportedInstruction
+    from triton_toyisa.emit.ir import UnsupportedMarker
+    
+    prog_invalid_op = Program(
+        isa_name="toyisa",
+        schema_version=1,
+        inputs=("Out",),
+        instrs=(
+            Instr(
+                name="EPI",
+                operands={"value": Imm(0)},
+                defs=("Invalid",),
+                source_ops=(SourceRef(op_name="tt.invalid_op_does_not_exist"),),
+            ),
+        ),
+    )
+    inputs = {"Out": np.array([0], dtype=np.float32)}
+
+    # Invalid op raises UnsupportedInstruction (not implemented by machine)
+    with pytest.raises(UnsupportedInstruction, match="tt.invalid_op_does_not_exist"):
+        emulate(prog_invalid_op, inputs, use_cpp=True)
+
+    prog_with_marker = Program(
+        isa_name="toyisa",
+        schema_version=1,
+        inputs=("Out",),
+        instrs=(),
+        unsupported=(
+            UnsupportedMarker(
+                op_name="tt.something_hard",
+                reason="not supported",
+            ),
+        )
+    )
+
+    # UNSUPPORTED marker raises ProgramNotExecutable
+    with pytest.raises(ProgramNotExecutable, match="tt.something_hard"):
+        emulate(prog_with_marker, inputs, use_cpp=True)
+
