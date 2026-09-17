@@ -1,6 +1,7 @@
 import pytest
 
 from triton_toyisa.ttir.parser import RawLoc, RawModule, RawOp
+from triton_toyisa.ttir.ssa import SsaValue
 from triton_toyisa.ttir.to_ir import build_ir
 
 
@@ -37,7 +38,9 @@ def test_build_ir_basic_structure(input_class):
     
     # Run the core logic against the dummy input
     # Track B can now make this test pass without waiting for Track A!
-    with pytest.raises(NotImplementedError):
-        _module = build_ir(dummy_raw_module)
-        # Eventually assert module.ops[0].name == "arith.constant"
-        # and assert isinstance(module.ops[0].results[0], SsaValue)
+    result = build_ir(dummy_raw_module)
+    assert result.ok, f"handbuilt input refused: {result.diagnostic}"
+    module = result.unwrap()
+    (op,) = module.body.blocks[0].operations
+    assert op.name == "arith.constant"
+    assert isinstance(op.results[0], SsaValue)

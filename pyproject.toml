@@ -58,6 +58,12 @@ src = ["src", "tests", "tools", "bench"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]
+# Three characters the project uses deliberately. `α`/`β` are the names the
+# declarative model gives the computation/addressing attribute split, quoted
+# from the method of record; the en dash is prose punctuation. Everything else
+# RUF001-RUF003 flags is still flagged — a homoglyph in an identifier or a path
+# is a real defect.
+allowed-confusables = ["α", "β", "–"]
 
 [tool.ruff.lint.per-file-ignores]
 "tools/snapshot_fixtures.py" = ["E402"]
