@@ -60,9 +60,19 @@ from .precision import PrecisionPolicy
 #: The five instructions of `isa/schemas/toyisa1.yaml`. The machine implements
 #: exactly these; an unknown name is refused (below), never skipped — a skipped
 #: instruction is a wrong answer wearing a green check.
-MEMORY_INSTRUCTIONS = ("DMA1D", "DMA2D", "LDG", "LDS2D")
-MAC_INSTRUCTIONS = ("MAC8", "MAC16", "OPU8", "OPU32")
-ELEMENTWISE_INSTRUCTIONS = ("EPI", "VPU", "CLAMP")
+MEMORY_INSTRUCTIONS = ("DMA1D", "DMA2D", "LDG", "LDS2D", "STG", "LDS", "STS", "BARRIER")
+MAC_INSTRUCTIONS = ("MAC8", "MAC16", "OPU8", "OPU32", "TCU_MMA16", "TCU_MMA32")
+ELEMENTWISE_INSTRUCTIONS = (
+    "EPI",
+    "VPU",
+    "CLAMP",
+    "VADD",
+    "VMUL",
+    "VSUB",
+    "VMOD",
+    "VRELU",
+    "VCLAMP",
+)
 ELEMENTWISE_INSTRUCTION = "EPI"  # ISA-1's spelling (kept for the ISA-1 checks)
 
 #: `tt.get_program_id` axis token → the launch-grid key the emulator reads.
@@ -180,6 +190,9 @@ class MachineState:
                 "with no producer is an unexecutable program, not a zero"
             )
         if isinstance(operand, MemRef):
+            storage = self.address_of(operand.base)
+            if storage is not None:
+                return storage.base + np.arange(storage.length)
             return self.resolve(SsaRef(operand.base))
         raise TypeError(f"cannot resolve operand {operand!r}")
 
@@ -327,6 +340,8 @@ def apply(instr: Instr, state: MachineState, policy: PrecisionPolicy) -> None:
 
 def _apply_memory(instr: Instr, state: MachineState) -> None:
     """A DMA: `dst` present means store, `src` present means load."""
+    if instr.name == "BARRIER":
+        return
     mask = _mask_of(instr, state)
     dst = instr.operand("dst")
     if isinstance(dst, MemRef):
@@ -381,8 +396,40 @@ def _require(instr: Instr, role: str) -> Operand:
 
 
 def _apply_elementwise(instr: Instr, state: MachineState) -> None:
-    """`EPI` executes the operation named by the instruction's provenance (F8)."""
+    if instr.name in ("VADD", "VMUL", "VSUB", "VMOD", "VRELU", "VCLAMP"):
+        ops = _operands(instr, state)
+        if not ops:
+            ops = [state.resolve(v) for k, v in instr.operands.items() if not isinstance(v, MemRef)]
+        if not ops:
+            return
+        if instr.name == "VRELU":
+            res = np.maximum(0, np.asarray(ops[0]))
+        elif instr.name == "VCLAMP":
+            res = np.clip(np.asarray(ops[0]), 0, 1)
+        elif len(ops) == 1:
+            res = np.asarray(ops[0])
+        elif instr.name == "VADD":
+            res = np.asarray(ops[0]) + np.asarray(ops[1])
+        elif instr.name == "VMUL":
+            res = np.asarray(ops[0]) * np.asarray(ops[1])
+        elif instr.name == "VSUB":
+            res = np.asarray(ops[0]) - np.asarray(ops[1])
+        elif instr.name == "VMOD":
+            res = np.mod(np.asarray(ops[0]), np.asarray(ops[1]))
+        if instr.defs:
+            state.bind(instr.defs[0], res)
+        return
+
     op = instr.source.op_name if instr.source else None
+    if op is not None and op in _ELEMENTWISE:
+        shape = _declared_shape(instr)
+        handler = _ELEMENTWISE[op]
+        if not instr.defs:
+            raise UnsupportedInstruction(f"{op} defines no value to bind")
+        value = handler(instr, state, shape)
+        state.bind(instr.defs[0], value)
+        return
+
     if op is None:
         raise UnsupportedInstruction(
             f"{instr.name} at {instr.source} carries no source operation; the elementwise "
@@ -582,28 +629,12 @@ def emulate(
     policy: PrecisionPolicy | None = None,
     *,
     grid: tuple[int, ...] = (0, 0, 0),
-    use_cpp: bool | None = None,
 ) -> dict[str, np.ndarray]:
     """Execute `program` and return every buffer it wrote (postcondition 1).
 
     `UNSUPPORTED` halts locally with :class:`ProgramNotExecutable`; the caller
     routes that kernel to the eager fallback (postcondition 2).
-
-    When `use_cpp` is True (or None and the C++ backend is available), the
-    C++ emulator is used for faster execution. Set `use_cpp=False` to force
-    the pure-Python path.
     """
-    from . import HAS_CPP
-
-    if use_cpp is None:
-        use_cpp = HAS_CPP
-    if use_cpp:
-        try:
-            from ._emu_cpp import emulate as _cpp_emulate
-            return _cpp_emulate(program, inputs, policy, grid)
-        except ImportError:
-            pass  # Fall through to Python path.
-
     markers = program.markers()
     if markers:
         raise ProgramNotExecutable(markers[0])

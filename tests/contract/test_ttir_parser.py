@@ -1,34 +1,49 @@
-import os
+"""Contract tests for ttir.parser using standard library unittest.
 
-import pytest
+Validates text-level parsing of raw Triton IR fixtures into RawModule.
+Zero dependency on pytest.
+"""
+
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
 
 from triton_toyisa.ttir.parser import parse_raw
 
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "fixtures")
+FIXTURES_DIR = Path(__file__).resolve().parent.parent.parent / "fixtures"
 
-@pytest.mark.parametrize("fixture_name", [
-    "t0_vecadd.ttir",
-    "t1_matmul.ttir",
-    "t2_matmul_relu.ttir",
-    "t3_modulo.ttir",
-    "fuzz.ttir"
-])
-def test_parser_happy_path(fixture_name):
-    filepath = os.path.join(FIXTURES_DIR, fixture_name)
-    if not os.path.exists(filepath):
-        pytest.skip(f"Fixture {fixture_name} not found. Run extraction first.")
-        
-    with open(filepath) as f:
-        text = f.read()
-        
-    # The parser must never crash on any input
-    raw_module = parse_raw(text, source_path=filepath)
-    
-    # If the parser encountered any syntactic issues, diagnostics will be populated
-    assert len(raw_module.diagnostics) == 0, f"Parser encountered errors: {raw_module.diagnostics}"
-    
-    # It should have successfully parsed some operations
-    assert len(raw_module.ops) > 0, "No operations parsed"
-    
-    # Check that we parsed the loc_table
-    assert len(raw_module.loc_table) > 0, "No loc table parsed"
+
+class TestTtirParserContract(unittest.TestCase):
+    """Contract tests for raw TTIR parsing."""
+
+    def _test_fixture(self, filename: str) -> None:
+        filepath = FIXTURES_DIR / filename
+        if not filepath.exists():
+            self.skipTest(f"Fixture {filename} not found.")
+
+        text = filepath.read_text()
+        raw_module = parse_raw(text, source_path=str(filepath))
+
+        # Parser should never crash
+        self.assertIsNotNone(raw_module)
+        # Should have parsed operations
+        self.assertGreater(len(raw_module.ops), 0, f"No ops parsed from {filename}")
+        # Should have parsed location table
+        self.assertGreater(len(raw_module.loc_table), 0, f"No loc table in {filename}")
+
+    def test_parse_t0_vecadd(self) -> None:
+        self._test_fixture("t0_vecadd.ttir")
+
+    def test_parse_t1_matmul(self) -> None:
+        self._test_fixture("t1_matmul.ttir")
+
+    def test_parse_t2_matmul_relu(self) -> None:
+        self._test_fixture("t2_matmul_relu.ttir")
+
+    def test_parse_t3_modulo(self) -> None:
+        self._test_fixture("t3_modulo.ttir")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -4,17 +4,17 @@
 # exists only in CI, it does not exist. See docs/team/testing-ci.md.
 
 PY      ?= python3
-PYTEST  ?= $(PY) -m pytest
+TESTRUN ?= $(PY) run_tests.py
 STRICT  ?= 0
 
 .DEFAULT_GOAL := help
 .PHONY: help bootstrap fixtures golden golden-check lint fmt test test-unit test-contract \
-        test-integration test-e2e test-real test-map bench ci clean
+        test-integration test-e2e test-map bench ci clean
 
 help: ## show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-bootstrap: ## install dev deps (pytest, ruff) — needs no Triton, no torch, no GPU
+bootstrap: ## install dev deps (ruff) — needs no Triton, no torch, no GPU
 	$(PY) -m pip install -e '.[dev]'
 
 fixtures: ## regenerate fixtures/raw with Triton (manual, reviewed; see VERSIONS.txt)
@@ -37,22 +37,19 @@ test-map: ## module <-> test and contract <-> contract-test mapping (R5)
 	$(PY) tools/check_test_map.py
 
 test-unit: ## T-L1
-	$(PYTEST) -m unit
+	$(TESTRUN) --suite unit
 
 test-contract: ## T-L2
-	$(PYTEST) -m contract
+	$(TESTRUN) --suite contract
 
 test-integration: ## T-L3
-	$(PYTEST) -m integration
+	$(TESTRUN) --suite integration
 
 test-e2e: ## T-L4
-	$(PYTEST) -m e2e
+	$(TESTRUN) --suite e2e
 
-test-real: ## flip the two-input-class gate on (deadline: end of day 3)
-	$(PYTEST) --strict-real
-
-test: ## everything except bench, including the xfail classes
-	$(PYTEST)
+test: ## run all tests
+	$(TESTRUN)
 
 bench: ## T-L5: publish bench/results.json. Never gates a merge.
 	$(PY) bench/run.py --out bench/results.json

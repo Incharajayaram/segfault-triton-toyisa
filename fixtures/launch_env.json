@@ -1,0 +1,25 @@
+{
+  "comment": "The launch environment each fixture was compiled under. The symbolic strides in the ttir (%sam, %sak, ...) resolve to these at selection time. Declared here, not guessed at the call site: a different launch is a different program.\n\nThe strides are the PHYSICAL strides of contiguous (M,K), (K,N), (M,N) tensors: A's k-stride is K=64, B's k-stride is N=128 (NOT the K-loop bound — this file previously said 64, which addresses the wrong rows and computes garbage; found by executing the kernel on a real GPU against fp64), C's m-stride is N=128. Alignment 4 holds for every value. Every constraint of both ISAs is still satisfied by these values (MAC16 needs stride[1]==1 and m,n%16==0; DMA2D needs shape[0]%4==0 and stride[0]%4==0), so selection is unchanged by the correction — verified: the selector table reproduces identically before and after.",
+  "t1_matmul": {
+    "M": 128, "N": 128, "K": 64,
+    "%pid_m": "pid", "%pid_n": "pid",
+    "%sam": 64, "%sak": 1,
+    "%sbk": 128, "%sbn": 1,
+    "%scm": 128, "%scn": 1
+  },
+  "t2_matmul_relu": {
+    "M": 128, "N": 128, "K": 64,
+    "%pid_m": "pid", "%pid_n": "pid",
+    "%sam": 64, "%sak": 1,
+    "%sbk": 128, "%sbn": 1,
+    "%scm": 128, "%scn": 1
+  },
+  "t3_modulo": {
+    "M": 16, "N": 16,
+    "%stride_xm": 16, "%stride_xn": 1,
+    "%stride_om": 16, "%stride_on": 1
+  },
+  "t0_vecadd": {
+    "%n": 1024
+  }
+}

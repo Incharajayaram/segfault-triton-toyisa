@@ -1,0 +1,149 @@
+schema_version: 1
+name: vortex_rvgpu
+description: >
+  Vortex open-source RISC-V SIMT GPGPU architecture with memory coalescer,
+  multi-banked scratchpad memory (16 banks), Tensor Core Unit (TCU_MMA16, TCU_MMA32),
+  and SIMT vector processing unit (VPU).
+
+data_model:
+  memory_spaces:
+    - name: global
+      kind: flat
+      dtype: f32
+      alignment_words: 8
+    - name: scratch
+      kind: banked
+      dtype: f32
+      banks: 16
+      interleave_bytes: 4
+      alignment_words: 1
+    - name: accum
+      kind: register
+      dtype: f32
+      alignment_words: 1
+  tile_dims: [BM, BN, BK]
+  max_dims: 4
+
+instructions:
+  - name: LDG
+    kind: memory
+    rule: memory
+    addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
+    time: {expr: "words / 2.0", unit: word}
+    cost: {expr: "0.50 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "dst[0:length] = global[base:base+length]"
+
+  - name: STG
+    kind: memory
+    rule: memory
+    addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
+    time: {expr: "words / 2.0", unit: word}
+    cost: {expr: "0.50 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "global[base:base+length] = src[0:length]"
+
+  - name: LDS
+    kind: memory
+    rule: memory
+    addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
+    time: {expr: "words / 8.0", unit: word}
+    cost: {expr: "0.10 * words", unit: word}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[0:length] = scratch[base:base+length]"
+
+  - name: STS
+    kind: memory
+    rule: memory
+    addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
+    time: {expr: "words / 8.0", unit: word}
+    cost: {expr: "0.10 * words", unit: word}
+    constraint: "aligned(base, 4)"
+    semantics: "scratch[base:base+length] = src[0:length]"
+
+  - name: TCU_MMA16
+    kind: compute
+    rule: mac
+    tile: {m: 16, n: 16}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: tf32, reduce_dim: k, order: k_major_sequential}
+    time: {expr: "1.0 * m * n * k / (16*16)", unit: cycle}
+    cost: {expr: "0.40 * m * n * k / (16*16)", unit: mac}
+    constraint: "all_of(m % 16 == 0, n % 16 == 0)"
+    semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(b[k,n])"
+
+  - name: TCU_MMA32
+    kind: compute
+    rule: mac
+    tile: {m: 32, n: 32}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: tf32, reduce_dim: k, order: k_major_sequential}
+    time: {expr: "1.0 * m * n * k / (32*32)", unit: cycle}
+    cost: {expr: "0.25 * m * n * k / (32*32)", unit: mac}
+    constraint: "all_of(m % 32 == 0, n % 32 == 0)"
+    semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(b[k,n])"
+
+  - name: VADD
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 16.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = src0[i] + src1[i]"
+
+  - name: VMUL
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 16.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = src0[i] * src1[i]"
+
+  - name: VSUB
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 16.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = src0[i] - src1[i]"
+
+  - name: VMOD
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 8.0", unit: cycle}
+    cost: {expr: "0.10 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = src0[i] % src1[i]"
+
+  - name: VRELU
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 16.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = max(0, src[i])"
+
+  - name: VCLAMP
+    kind: compute
+    rule: elementwise
+    addressing: {form: register}
+    time: {expr: "words / 16.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = min(max(lo, src[i]), hi)"
+
+  - name: BARRIER
+    kind: memory
+    rule: memory
+    addressing: {form: register}
+    time: {expr: "1.0", unit: cycle}
+    cost: {expr: "0.01", unit: ctrl}
+    constraint: "aligned(base, 1)"
+    semantics: "vx_bar(warp_group)"

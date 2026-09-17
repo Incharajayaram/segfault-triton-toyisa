@@ -3,6 +3,4 @@
 # in and all expectations come from fixtures/GOLDEN.json.
 -numpy>=1.26
 -pyyaml>=6.0
-pytest>=8.0
-pytest-cov>=5.0
 ruff>=0.6

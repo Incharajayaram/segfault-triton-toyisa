@@ -555,7 +555,10 @@ class EmissionRecord:
 
 
 def _source_position(item: Loop | Instr) -> tuple[int, int]:
-    source = item.source_ops[0] if isinstance(item, Instr) else item.source
+    if isinstance(item, Instr):
+        source = item.source_ops[0] if item.source_ops else None
+    else:
+        source = item.source
     if source is None:
         return (0, 0)
     return (source.line, source.col)

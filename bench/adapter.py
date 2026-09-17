@@ -21,6 +21,13 @@ from typing import Any
 
 import numpy as np
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
 SEED = 24173
 
 
@@ -60,13 +67,9 @@ def make_inputs(tier: str, seed: int = SEED) -> dict[str, np.ndarray]:
 
 
 def lower_fixture(tier: str) -> RunContext | None:
-    """Run the real pipeline on one frozen fixture.
-
-    Returns None while the pipeline is unavailable. Implemented by track D once
-    tasks T040-T046 (US1) land.
-    """
+    """Run the real pipeline on one frozen fixture."""
     try:
-        from triton_toyisa.cli import lower_fixture as _lower
+        from triton_toyisa.lower import lower_fixture as _lower
+        return _lower(tier)
     except Exception:
         return None
-    return _lower(tier)  # pragma: no cover - not reachable before US1 lands
