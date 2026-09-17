@@ -57,7 +57,7 @@ from torch._dynamo.backends.registry import register_backend
 
 from ..emit.assemble import assemble
 from ..emit.ir import Program
-from ..emu.exec import ProgramNotExecutable, emulate
+from ..emu.exec import ProgramNotExecutable, StorageError, emulate
 from ..emu.precision import PrecisionPolicy
 from ..idioms.detect import annotate
 from ..isa.schema import load_builtin
@@ -790,6 +790,12 @@ def _eager_fallback(graph: Any) -> Callable[..., Any]:
     return run
 
 
+#: The ISA the FX proof-of-concept path lowers to. A module-level name rather
+#: than a literal at the call site, so a demo can retarget the live seam without
+#: editing the backend.
+FX_ISA = "toyisa1"
+
+
 @register_backend(name="toyisa")
 def toyisa_backend(graph: Any, example_inputs: Sequence[torch.Tensor]) -> Callable[..., Any]:
     """The registered Dynamo backend (FR-026, SC-001).
@@ -808,6 +814,45 @@ def toyisa_backend(graph: Any, example_inputs: Sequence[torch.Tensor]) -> Callab
     kernels = list(plan.lowered)
 
     if not kernels:
+        # No recorded TTIR lowering matched. Before falling back to eager, try
+        # lowering the FX graph itself (`fx_lower`): that route needs no frozen
+        # TTIR, which is the whole point of it — it is the only path here that
+        # can lower a graph nobody prepared in advance. It is deliberately narrow
+        # and returns None for anything outside its op set, so this is an
+        # addition to the fallback chain and never a replacement for it.
+        from .fx_lower import lower_fx_graph
+
+        reasons: list[str] = []
+        fx = lower_fx_graph(graph, example_inputs, isa_name=FX_ISA, report=reasons)
+        if fx is not None and fx.fully_lowered:
+
+            def run_fx(*args: Any) -> Any:
+                tensors = [arg for arg in args if isinstance(arg, torch.Tensor)]
+                if not tensors:
+                    return graph(*args)
+                try:
+                    produced = fx.run(tensors)
+                except (ProgramNotExecutable, StorageError):
+                    plan.fallbacks.append(
+                        FallbackRecord(
+                            reason="the FX-lowered program could not execute",
+                            stage="execute",
+                            nodes=plan.nodes,
+                        )
+                    )
+                    return graph(*args)
+                return _backend_return(torch.from_numpy(produced))
+
+            run_fx.toyisa_plan = plan  # type: ignore[attr-defined]
+            run_fx.toyisa_fx = fx  # type: ignore[attr-defined]
+            return run_fx
+
+        for reason in reasons:
+            plan.fallbacks.append(
+                FallbackRecord(
+                    reason=reason, stage="fx-lower", nodes=plan.nodes, detail=f"isa={FX_ISA}"
+                )
+            )
         run = _eager_fallback(graph)
         run.toyisa_plan = plan  # type: ignore[attr-defined]
         return run

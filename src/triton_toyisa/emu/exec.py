@@ -514,6 +514,18 @@ def _addf(left, right) -> Any:
     )
 
 
+def _mulf(left, right) -> Any:
+    return (np.asarray(left, dtype=np.float32) * np.asarray(right, dtype=np.float32)).astype(
+        np.float32
+    )
+
+
+def _subf(left, right) -> Any:
+    return (np.asarray(left, dtype=np.float32) - np.asarray(right, dtype=np.float32)).astype(
+        np.float32
+    )
+
+
 def _muli(left, right) -> Any:
     return np.multiply(np.asarray(left), np.asarray(right))
 
@@ -557,6 +569,8 @@ _ELEMENTWISE: dict[str, Any] = {
     "tt.expand_dims": _expand_dims,
     "arith.addi": _binary(_addi),
     "arith.addf": _binary(_addf),
+    "arith.mulf": _binary(_mulf),
+    "arith.subf": _binary(_subf),
     "arith.muli": _binary(_muli),
     "arith.divsi": _binary(_divsi),
     "arith.remsi": _binary(_remsi),

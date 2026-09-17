@@ -24,6 +24,12 @@ data_model:
   tile_dims: [BM, BN, BK]
   max_dims: 4
 
+# `op:` names the operations each elementwise unit performs. Without it every
+# instruction here shares one rule and one cost (`0.05 * words`), so minimum-cost
+# selection resolved the tie by declaration order and chose VADD for *every*
+# elementwise operation -- including relu, which the emulator then computed as an
+# addition and returned a wrong answer for with no diagnostic. Declaring the ops
+# lets selection reject an instruction that cannot perform the operation.
 instructions:
   - name: LDG
     kind: memory
@@ -104,6 +110,7 @@ instructions:
   - name: VADD
     kind: compute
     rule: elementwise
+    op: [arith.addf, arith.addi]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -113,6 +120,7 @@ instructions:
   - name: VMUL
     kind: compute
     rule: elementwise
+    op: [arith.mulf, arith.muli]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -122,6 +130,7 @@ instructions:
   - name: VSUB
     kind: compute
     rule: elementwise
+    op: [arith.subf]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -131,6 +140,7 @@ instructions:
   - name: VMOD
     kind: compute
     rule: elementwise
+    op: [arith.remsi, arith.remui]
     addressing: {form: register}
     time: {expr: "words / 8.0", unit: cycle}
     cost: {expr: "0.10 * words", unit: alu}
@@ -140,6 +150,7 @@ instructions:
   - name: VRELU
     kind: compute
     rule: elementwise
+    op: [arith.maxnumf]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -149,6 +160,7 @@ instructions:
   - name: VCLAMP
     kind: compute
     rule: elementwise
+    op: [arith.maxnumf, arith.minnumf]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
