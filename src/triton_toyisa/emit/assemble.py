@@ -607,7 +607,7 @@ def _select(
             "is not the target ISA's limitation, so it must not be reported as one"
         )
     selection = _call_selector(
-        selector, schema, binding.kind, binding.descriptor, binding.tile, env
+        selector, schema, binding.kind, binding.descriptor, binding.tile, env, _direction(op)
     )
     # `aligned(X, k)` decides against the ACTIVE machine's allocator promise:
     # selection is per-schema, and a second machine may promise differently.
@@ -682,6 +682,24 @@ def _candidate_reason(candidate: object, chosen_cost: float | None) -> str:
     return "rejected with no predicate recorded (selector.md postcondition 2)"
 
 
+#: Which way an access moves data, by the operation that performs it. `tt.load`
+#: reads through its pointer operand and `tt.store` writes through its own, so
+#: the *operation name* is what says direction; nothing in the descriptor does.
+_DIRECTION_OF_OP = {"tt.load": "load", "tt.store": "store"}
+
+
+def _direction(op: Operation) -> str | None:
+    """`load`, `store`, or `None` for an operation that is not a memory access.
+
+    Passed to the selector so an ISA that splits global memory into directional
+    instructions can have the wrong one rejected. Vortex declares LDG and STG
+    identically in every field selection reads, so without this the minimum-cost
+    rule broke the tie by declaration order and chose LDG for stores as well as
+    loads -- and the emulator then executed a store as a load.
+    """
+    return _DIRECTION_OF_OP.get(op.name)
+
+
 def _call_selector(
     selector: object,
     schema: object,
@@ -689,6 +707,7 @@ def _call_selector(
     descriptor: object,
     tile: tuple[int, ...] | None,
     env: dict[str, int] | None,
+    direction: str | None = None,
 ) -> object:
     """Call the selector with the arguments its signature accepts.
 
@@ -698,7 +717,7 @@ def _call_selector(
     taking (schema, kind, descriptor, tile[, env])", and the caller decides by
     signature, so neither side needs to know the other exists.
     """
-    args = (schema, kind, descriptor, tile, env)
+    args = (schema, kind, descriptor, tile, env, direction)
     limit = _positional_arity(selector)
     if limit is None or limit >= len(args):
         return selector(*args)

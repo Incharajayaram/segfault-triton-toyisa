@@ -19,8 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.ttir.to_ir import parse_module
 from triton_toyisa.ttir.graph import build_def_use, walk_region
+from triton_toyisa.ttir.to_ir import parse_module
 
 FAILURES: list[str] = []
 

@@ -44,6 +44,7 @@ def enumerate_candidates(
     descriptor: object,
     tile: tuple[int, ...] | None = None,
     env: dict[str, int] | None = None,
+    direction: str | None = None,
 ) -> tuple[Candidate, ...]:
     """Every instruction of `kind` against this operand, including rejected ones.
 
@@ -66,6 +67,24 @@ def enumerate_candidates(
 
     out: list[Candidate] = []
     for instruction in schema.of_kind(kind):
+        # Direction is checked before the predicate, and recorded as a rejection
+        # rather than a filter, because postcondition 1 says nothing is
+        # pre-filtered: "STG is not a load" belongs in the audit trail next to
+        # the cost-based rejections. An instruction that declares no direction
+        # serves both, so an ISA that does not split loads from stores sees no
+        # change at all.
+        serves = getattr(instruction, "serves", None)
+        if direction is not None and callable(serves) and not serves(direction):
+            out.append(
+                Candidate(
+                    instruction,
+                    False,
+                    f"declared direction {getattr(instruction, 'direction', None)!r} "
+                    f"cannot lower a {direction}",
+                    None,
+                )
+            )
+            continue
         verdict = evaluate(reason_of(instruction), descriptor, tile, env)
         if verdict is True:
             cost: float | None = cost_of(instruction, descriptor, tile, env)
@@ -83,6 +102,7 @@ def select(
     descriptor: object,
     tile: tuple[int, ...] | None = None,
     env: dict[str, int] | None = None,
+    direction: str | None = None,
 ) -> SelectionReport:
     """Minimum cost among the admissible; no default fallback.
 
@@ -93,10 +113,10 @@ def select(
     Postcondition 5: `oracle_min` runs the same enumeration the other way, and
     the gap is reported, not hidden (SC-005, EC-072).
     """
-    candidates = enumerate_candidates(schema, kind, descriptor, tile, env)
+    candidates = enumerate_candidates(schema, kind, descriptor, tile, env, direction)
     admissible = [c for c in candidates if c.admissible and c.cost is not None]
     if not admissible:
-        oracle = oracle_min(schema, kind, descriptor, tile, env)
+        oracle = oracle_min(schema, kind, descriptor, tile, env, direction)
         return SelectionReport(
             chosen=None,
             chosen_cost=None,
@@ -112,7 +132,7 @@ def select(
     # depending on an attribute the stand-in does not carry.
     order = {id(c.instruction): i for i, c in enumerate(candidates)}
     best = min(admissible, key=lambda c: (c.cost, order[id(c.instruction)]))
-    oracle = oracle_min(schema, kind, descriptor, tile, env)
+    oracle = oracle_min(schema, kind, descriptor, tile, env, direction)
     gap = max(0.0, (best.cost or 0.0) - (oracle.oracle_min_cost or 0.0))
     return SelectionReport(
         chosen=best.instruction,
@@ -131,6 +151,7 @@ def oracle_min(
     descriptor: object,
     tile: tuple[int, ...] | None = None,
     env: dict[str, int] | None = None,
+    direction: str | None = None,
 ) -> SelectionReport:
     """The exhaustive oracle: same enumeration, optimum reported separately.
 
@@ -140,7 +161,7 @@ def oracle_min(
     *report* carries the oracle column and a future ISA with coupled costs
     (ISA-2's bank moves) cannot silently drop the comparison (SC-005).
     """
-    candidates = enumerate_candidates(schema, kind, descriptor, tile, env)
+    candidates = enumerate_candidates(schema, kind, descriptor, tile, env, direction)
     admissible = [c for c in candidates if c.admissible and c.cost is not None]
     if not admissible:
         return SelectionReport(

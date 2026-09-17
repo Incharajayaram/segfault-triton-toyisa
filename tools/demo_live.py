@@ -20,15 +20,15 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.ttir.to_ir import parse_module
-from triton_toyisa.ttir.graph import build_def_use, walk_region
-from triton_toyisa.recognize.descriptor import describe_operation
+from triton_toyisa.emit.assemble import assemble
+from triton_toyisa.emu.exec import emulate
+from triton_toyisa.emu.hardware import BankConflictUnit, CoalescingUnit
+from triton_toyisa.emu.precision import PrecisionPolicy
 from triton_toyisa.idioms.detect import annotate
 from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.emit.assemble import assemble
-from triton_toyisa.emu.hardware import CoalescingUnit, BankConflictUnit
-from triton_toyisa.emu.exec import emulate
-from triton_toyisa.emu.precision import PrecisionPolicy
+from triton_toyisa.recognize.descriptor import describe_operation
+from triton_toyisa.ttir.graph import build_def_use, walk_region
+from triton_toyisa.ttir.to_ir import parse_module
 
 # Terminal styling
 CYAN = "\033[96m"
@@ -200,7 +200,7 @@ def run_pipeline(tier: str = "t0_vecadd", isa_name: str = "toyisa1", seed: int =
         markers = program.markers()
         if markers:
             print(f"  ✔ Honest Refusal: Kernel requires unmodeled modulo wrap (markers={len(markers)})")
-            print(f"  ✔ Routing to eager fallback per contract FR-025.")
+            print("  ✔ Routing to eager fallback per contract FR-025.")
             toy_output = None
         else:
             inputs = {"%x_ptr": x, "%y_ptr": y, "%out_ptr": out, "%n": 1024}

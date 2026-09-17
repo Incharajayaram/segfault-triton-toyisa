@@ -16,7 +16,6 @@ Checks:
 """
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -25,9 +24,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from triton_toyisa.emit.ir import Instr, Program, SsaRef  # noqa: E402
 from triton_toyisa.emu.exec import emulate  # noqa: E402
-from triton_toyisa.emu.precision import PrecisionPolicy  # noqa: E402
-from triton_toyisa.emit.ir import Imm, Instr, Program, SsaRef  # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -88,7 +86,7 @@ def main() -> int:
         emulate(prog, {})  # %x is declared but not supplied
         FAILURES.append("E5")
         print("  FAIL E5: missing input accepted silently")
-    except Exception as exc:  # noqa: BLE001 — the raise IS the expected behavior
+    except Exception as exc:
         check("E5: raises on missing input", isinstance(exc, Exception), True,
               f"{type(exc).__name__}: {exc}")
 
@@ -108,7 +106,7 @@ def main() -> int:
         emulate(prog2, {"%x": np.ones(4, dtype=np.float32)})
         FAILURES.append("E6")
         print("  FAIL E6: program with UNSUPPORTED marker executed anyway")
-    except Exception as exc:  # noqa: BLE001 — ProgramNotExecutable IS the expected behavior
+    except Exception as exc:
         check("E6: UNSUPPORTED halts via ProgramNotExecutable",
               type(exc).__name__, "ProgramNotExecutable",
               f"got {type(exc).__name__}: {exc}")

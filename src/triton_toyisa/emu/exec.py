@@ -629,12 +629,42 @@ def emulate(
     policy: PrecisionPolicy | None = None,
     *,
     grid: tuple[int, ...] = (0, 0, 0),
+    use_cpp: bool | None = None,
 ) -> dict[str, np.ndarray]:
     """Execute `program` and return every buffer it wrote (postcondition 1).
 
     `UNSUPPORTED` halts locally with :class:`ProgramNotExecutable`; the caller
     routes that kernel to the eager fallback (postcondition 2).
+
+    `use_cpp` selects the backend:
+
+    * `None` (default) -- the C++ extension when it is built, else NumPy. This
+      is the "go faster if you can" case and it must never change the answer.
+    * `True` -- require the C++ extension; raise if it is not built, rather than
+      silently returning NumPy's numbers under a flag that asked for C++. A
+      parity test that falls back is a parity test that proves nothing.
+    * `False` -- force the NumPy reference path, which is what the other half of
+      a parity comparison needs.
+
+    The extension is not built by `pip install .` today (KNOWN_GAPS.md G5), so
+    the default resolves to NumPy in a normal checkout.
     """
+    from . import HAS_CPP
+
+    if use_cpp and not HAS_CPP:
+        raise ProgramNotExecutable(
+            "use_cpp=True but the C++ backend is not built; refusing to answer "
+            "with the NumPy path under a flag that asked for C++"
+        )
+    if use_cpp is None and HAS_CPP:  # pragma: no cover - needs the built extension
+        from ._emu_cpp import emulate as cpp_emulate
+
+        return cpp_emulate(program, inputs, policy, grid=grid)
+    if use_cpp:  # pragma: no cover - needs the built extension
+        from ._emu_cpp import emulate as cpp_emulate
+
+        return cpp_emulate(program, inputs, policy, grid=grid)
+
     markers = program.markers()
     if markers:
         raise ProgramNotExecutable(markers[0])

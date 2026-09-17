@@ -48,7 +48,6 @@ def main() -> int:
     from triton_toyisa.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
 
     schema = load_builtin("toyisa1")
-    from pathlib import Path as _P
     launch = json.loads((ROOT / "fixtures" / "launch_env.json").read_text())
     program = None
     expected_counts = {"t0_vecadd": 18, "t1_matmul": 40, "t2_matmul_relu": 40, "t3_modulo": 25}
@@ -66,7 +65,7 @@ def main() -> int:
             # contracted signature: (module, graph, annotations, schema, env=...)
             program = assemble(module, graph, annotations, schema,
                                env=dict(launch[tier]))
-            n_items = len(program.instrs) + sum(len(l.body) for l in program.loops)
+            n_items = len(program.instrs) + sum(len(loop.body) for loop in program.loops)
             check(f"A/{tier}: assembled items ({n_items})", n_items > 0, True)
             check(f"A/{tier}: instruction count == {expected_counts[tier]}",
                   len(program.instrs), expected_counts[tier],
@@ -80,7 +79,7 @@ def main() -> int:
             else:
                 check(f"A/{tier}: no UNSUPPORTED markers", len(markers), 0,
                       f"markers: {[str(m) for m in markers[:2]]}")
-        except Exception as exc:  # noqa: BLE001 — a crash here is a finding, reported as one
+        except Exception as exc:
             FAILURES.append(f"A/{tier}: assemble")
             print(f"  FAIL A/{tier}: assemble RAISED {type(exc).__name__}: {exc}")
             continue
@@ -109,7 +108,7 @@ def main() -> int:
             err = float(np.max(np.abs(got - (x + y))))
             check("A/t0: emulator output == x+y (ieee)", err, 0.0,
                   f"max abs err={err}, buffers={list(out)}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # t0 assembled program carries an UNSUPPORTED marker -> halt is correct
             from triton_toyisa.emu.exec import ProgramNotExecutable
             check("A/t0: emulate either matches x+y or halts on a named refusal",
@@ -119,8 +118,8 @@ def main() -> int:
     # ------------------------------------------------------------------ #
     print("PATH B: demo pipeline (lower.py, hardcoded per-tier tables) — reported, cross-checked")
     try:
-        from triton_toyisa.lower import compute_reference, lower_fixture, make_inputs
         from triton_toyisa.emu.hardware import CoalescingUnit
+        from triton_toyisa.lower import lower_fixture, make_inputs
 
         # cross-check lower.py's coalescing stats against the unit it claims to use
         cu = CoalescingUnit(cache_line_bytes=32, warp_size=32)
@@ -158,7 +157,7 @@ def main() -> int:
                 bound = n * (2.0 * 2.0**-11 + 2.0**-24)
                 check(f"B/{tier}: t1 inside derived tf32 band (rel={rel:.3e} <= {bound:.3e})",
                       rel <= bound, True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         FAILURES.append("B: pipeline")
         print(f"  FAIL B: pipeline RAISED {type(exc).__name__}: {exc}")
 

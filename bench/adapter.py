@@ -16,13 +16,12 @@ DETERMINISM CONTRACT (see docs/team/testing-ci.md S7):
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from pathlib import Path
-import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT / "src") not in sys.path:

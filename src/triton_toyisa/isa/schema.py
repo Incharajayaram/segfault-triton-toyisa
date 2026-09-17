@@ -1008,7 +1008,23 @@ class Instruction:
     accumulate: AccumulateSpec | None = None
     tile: dict[str, int] | None = None
     ops: tuple[str, ...] = ()
+    #: `load`, `store`, or `None` for an instruction that serves both. An ISA
+    #: may split global memory into directional instructions (Vortex's LDG/STG);
+    #: when it does, the two are otherwise identical in every field selection
+    #: reads, so without this the minimum-cost rule resolves the tie by
+    #: declaration order and picks the load for stores as well. `None` is the
+    #: direction-agnostic case (toyisa1's DMA1D: `dst[0:length] = src[0:length]`),
+    #: where the emitter carries direction in the operand roles instead.
+    direction: str | None = None
     declaration_index: int = 0
+
+    def serves(self, direction: str | None) -> bool:
+        """Can this instruction lower an access in `direction`?
+
+        An undeclared direction serves both, so an ISA that does not make the
+        distinction is unaffected and needs no edit.
+        """
+        return self.direction is None or direction is None or self.direction == direction
 
     def admissible_for(
         self,
@@ -1076,8 +1092,20 @@ class IsaSchema:
 
 DEFAULT_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schemas", "toyisa1.yaml")
 
-_KINDS = ("memory", "compute")
-_RULES = ("memory", "mac", "elementwise")
+# `control`/`barrier` names the class of instruction that sequences execution
+# rather than moving or computing a value — a fence. It is deliberately a class
+# of its own rather than a `memory` instruction with an unusual cost, because
+# `select.enumerate_candidates` builds its candidate set from `of_kind(kind)`:
+# anything declared `memory` competes with the real loads and stores for every
+# `tt.load` and `tt.store`. Vortex's BARRIER was declared that way, and with a
+# trivially-true constraint and a flat 0.01 cost it won every memory selection
+# on minimum cost — so each load and store lowered to a fence and the emitted
+# program moved no data. No recognition rule emits `barrier`, so an instruction
+# in this class is declarable, validated and costed, but never selected for an
+# operand: exactly the semantics a fence needs.
+_KINDS = ("memory", "compute", "control")
+_RULES = ("memory", "mac", "elementwise", "barrier", "scratch")
+_DIRECTIONS = (None, "load", "store")
 _SPACE_KINDS = ("flat", "scratchpad", "accumulator")
 _ORDERS = ("k_major_sequential", "k_blocked")
 
@@ -1190,6 +1218,7 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
             accumulate=accumulate,
             tile=dict(tile_raw) if isinstance(tile_raw, dict) else None,
             ops=tuple(entry.get("op", ())),
+            direction=(str(entry["direction"]) if entry.get("direction") else None),
             declaration_index=index,
         )
 
@@ -1253,6 +1282,13 @@ def validate_schema(schema: IsaSchema) -> list[SchemaViolation]:
             # The coarse `kind` axis cannot drive selection (module docstring);
             # a schema that omits `rule` falls back to it only for compute.
             instruction = _with_rule(instruction)
+        if instruction.direction not in _DIRECTIONS:
+            problems.append(
+                SchemaViolation(
+                    f"{path}.direction",
+                    f"{instruction.direction!r} is not one of {_DIRECTIONS}",
+                )
+            )
         if instruction.rule not in _RULES:
             problems.append(
                 SchemaViolation(f"{path}.rule", f"{instruction.rule!r} is not one of {_RULES}")

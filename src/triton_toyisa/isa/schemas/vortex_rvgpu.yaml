@@ -27,6 +27,7 @@ data_model:
 instructions:
   - name: LDG
     kind: memory
+    direction: load
     rule: memory
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
@@ -36,6 +37,7 @@ instructions:
 
   - name: STG
     kind: memory
+    direction: store
     rule: memory
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
@@ -43,9 +45,22 @@ instructions:
     constraint: "in_bounds(base, length)"
     semantics: "global[base:base+length] = src[0:length]"
 
+  # LDS/STS move data *within* the scratchpad: their semantics read `scratch[...]`
+  # and never touch global memory, so they are not a valid single-instruction
+  # lowering of a `tt.load` or `tt.store` against a global pointer -- the data
+  # would have to be staged into scratch first. Declared `rule: memory` (as they
+  # were) they joined the candidate set for every global load and store, and at
+  # 0.10/word against LDG/STG's 0.50/word they won every selection on minimum
+  # cost. The emitted program then read a scratchpad buffer nothing had filled,
+  # which surfaced as the emulator being handed a size-1 buffer. `rule: scratch`
+  # keeps them declared, validated and costed while making them inadmissible for
+  # an operand no recognition rule maps to that rule -- the same treatment
+  # BARRIER gets. Contrast toyisa2's LDG/LDS2D, which are genuine global->scratch
+  # moves and so are correctly `rule: memory`.
   - name: LDS
     kind: memory
-    rule: memory
+    direction: load
+    rule: scratch
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}
@@ -54,7 +69,8 @@ instructions:
 
   - name: STS
     kind: memory
-    rule: memory
+    direction: store
+    rule: scratch
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}
@@ -139,9 +155,18 @@ instructions:
     constraint: "aligned(base, 4)"
     semantics: "dst[i] = min(max(lo, src[i]), hi)"
 
+  # BARRIER is a synchronisation instruction, not a memory-movement one. It was
+  # previously declared `kind: memory, rule: memory`, which put it in the
+  # candidate set the selector enumerates for every `tt.load` and `tt.store`.
+  # With a trivially-true constraint (`aligned(base, 1)`) and a flat cost of
+  # 0.01 it then won *every* memory selection on min-cost, so each load and
+  # store in each kernel lowered to a barrier and the emitted program moved no
+  # data at all. `kind: control` keeps it declarable and costed without making
+  # it admissible for a memory operand: no ttir operation maps to the `barrier`
+  # rule, so it is never selected, which is the correct behaviour for a fence.
   - name: BARRIER
-    kind: memory
-    rule: memory
+    kind: control
+    rule: barrier
     addressing: {form: register}
     time: {expr: "1.0", unit: cycle}
     cost: {expr: "0.01", unit: ctrl}

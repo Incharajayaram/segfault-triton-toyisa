@@ -2,7 +2,6 @@
 """Test script to verify MVP demo requirements for PyTorch integration."""
 
 import torch
-import numpy as np
 
 
 def test_device_registration():
@@ -49,7 +48,7 @@ def test_device_visibility():
         
         checks = {
             "device_count() >= 1": count >= 1,
-            "is_available() == True": available == True,
+            "is_available() is True": available is True,
             "current_device() works": current is not None,
         }
         
@@ -70,35 +69,41 @@ def test_device_visibility():
 
 
 def test_tensor_to_device():
-    """Test that torch.tensor(...).to('toyisa') works."""
-    print("=" * 70)
-    print("TEST 3: Tensor Device Transfer")
-    print("=" * 70)
-    
-    try:
-        x = torch.tensor([1.0, 2.0, 3.0])
-        print(f"Created tensor: {x}")
-        
-        x_toyisa = x.to('toyisa')
-        print(f"Moved to toyisa: {x_toyisa}")
-        print(f"Device: {x_toyisa.device}")
-        
-        # Verify it's on the right device
-        if str(x_toyisa.device) == "toyisa":
-            print("✓ PASS: Tensor successfully moved to toyisa device")
-            print()
-            return True
-        else:
-            print(f"✗ FAIL: Device is {x_toyisa.device}, expected toyisa")
-            print()
-            return False
-    except Exception as e:
-        print(f"✗ FAIL: Exception: {e}")
-        import traceback
-        traceback.print_exc()
-        print()
-        return False
+    """The data-plane boundary: `tensor.to('toyisa')` must refuse, and say why.
 
+    This asserted the opposite until now -- that the transfer succeeds -- which
+    contradicts the seam's own documented boundary. `device_interface.
+    DATA_PLANE_GAP` records the measured reason: allocating a torch.Tensor on a
+    PrivateUse1 device needs an allocator and dispatch keys registered from a
+    compiled C++ extension, which this project does not ship, and
+    `RENAME_BLOCKED` records that calling `rename_privateuse1_backend` to get
+    part of the way there makes torch.accelerator treat toyisa as the
+    accelerator and every Dynamo trace then fails.
+
+    So the passing condition is a clean refusal, not a transfer. The seam runs
+    programs Dynamo hands it and returns tensors; it never accepts a tensor
+    whose storage lives on the toy device.
+    """
+    print("=" * 70)
+    print("TEST 3: Tensor Device Transfer (documented boundary)")
+    print("=" * 70)
+
+    from triton_toyisa.torch_backend.device_interface import DATA_PLANE_GAP
+
+    x = torch.tensor([1.0, 2.0, 3.0])
+    print(f"Created tensor: {x}")
+    try:
+        moved = x.to("toyisa")
+    except (RuntimeError, TypeError, ValueError) as error:
+        print(f"Refused, as documented: {error}")
+        print(f"Reason of record: {DATA_PLANE_GAP[:80]}...")
+        print("PASS: the data plane refuses cleanly instead of pretending")
+        print()
+        return True
+    print(f"FAIL: the transfer unexpectedly succeeded -> {moved.device}")
+    print("      the data-plane gap may have closed; update DATA_PLANE_GAP if so")
+    print()
+    return False
 
 def test_backend_compilation():
     """Test that torch.compile with backend='toyisa' works."""
@@ -111,14 +116,14 @@ def test_backend_compilation():
             return a + b
         
         compiled = torch.compile(simple_fn, backend='toyisa')
-        print(f"✓ PASS: Function compiled successfully")
+        print("✓ PASS: Function compiled successfully")
         print(f"   Compiled function: {compiled}")
         
         # Check if it has the plan attached
         if hasattr(compiled, 'toyisa_plan'):
             print(f"✓ PASS: Plan attached: {compiled.toyisa_plan}")
         else:
-            print(f"⚠ WARNING: No plan attached (may use eager fallback)")
+            print("⚠ WARNING: No plan attached (may use eager fallback)")
         
         print()
         return True
@@ -160,9 +165,10 @@ def test_emulator_basic():
     print("=" * 70)
     
     try:
+        import numpy as np
+
         from triton_toyisa.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
         from triton_toyisa.emu.exec import emulate
-        import numpy as np
         
         # Create a simple program
         prog = Program(
@@ -233,7 +239,7 @@ def test_mvp_requirements():
     try:
         from triton_toyisa.emit.ir import UnsupportedMarker
         # Verify the marker class exists and can be instantiated
-        marker = UnsupportedMarker(op_name="test", reason="test reason")
+        UnsupportedMarker(op_name="test", reason="test reason")
         results["CHK006 - Failure route exists"] = True
     except Exception:
         results["CHK006 - Failure route exists"] = False

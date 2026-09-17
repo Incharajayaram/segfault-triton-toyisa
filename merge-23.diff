@@ -1,0 +1,2440 @@
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/CHANGES.md out/CHANGES.md
+--- a/CHANGES.md	1970-01-01 00:00:00.000000000 +0000
++++ b/CHANGES.md	2026-09-17 18:54:38.136174256 +0000
+@@ -0,0 +1,133 @@
++# Changes to `triton-generator-merge`
++
++Audit and repair pass. Every item below was reproduced before it was changed and
++re-verified after. Two findings that could not be closed are recorded in
++`KNOWN_GAPS.md` rather than worked around.
++
++## The headline defect: `lower.py` was not a compiler
++
++`src/triton_toyisa/lower.py` — the module `cli.py`, `bench/adapter.py`,
++`verify/verify_end_to_end.py` and the contract tests all depend on — was a lookup
++table keyed on the fixture's *filename*:
++
++```python
++if tier == "t0_vecadd":
++    instrs = [Instr(name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D",
++                    cost=128.0, ...)]
++```
++
++Every instruction, operand and cost was a literal. "Cross-ISA transfer" was a
++ternary on a string. The recogniser, the schema and the selector were imported
++nowhere in the file, despite its docstring naming all three.
++
++Consequences, all reproduced:
++
++* **`t3_modulo` reported "Successfully compiled" on every ISA.** It is the
++  corpus's negative control — its modulo wraparound makes the memory access
++  unstructured and it must be refused. `unsupported=[]` was hardcoded. A silent
++  miscompile of the exact kind the project's own first principle forbids.
++* **`t1`/`t2` crashed with an uncaught traceback** on toyisa1 and toyisa2: the
++  table emitted a `DMA1D` carrying no memory operand, which the emulator
++  correctly refused at run time.
++* Identical costs (435.2, 448.0) across three supposedly different ISAs.
++
++`lower.py` is now a thin driver over the production chain — `parse_module →
++build_def_use → annotate → assemble` — with the real schema and the real
++selector (`selector` is deliberately not passed, so `assemble`'s own
++`_default_selector → isa.select.select` runs rather than a stand-in that is
++admissible by construction). The public surface (`make_inputs`,
++`compute_reference`, `lower_fixture`, `RunContext`) is unchanged.
++
++## Schema defects in `vortex_rvgpu.yaml`
++
++Three instructions were declared in a way that made them win selections they
++should never have been candidates for. All three are the same shape of bug: an
++instruction that cannot lower an operand was declared as a candidate for it, and
++undercut the correct instruction on cost.
++
++| Instruction | Was | Effect | Now |
++|---|---|---|---|
++| `BARRIER` | `kind: memory`, trivially-true constraint, flat `0.01` cost | Won **every** memory selection; each load and store lowered to a fence and the program moved no data | `kind: control`, `rule: barrier` |
++| `LDS` / `STS` | `rule: memory`, `0.10 * words` against LDG/STG's `0.50` | Won every global load; the emitted program read a scratchpad nothing had filled | `rule: scratch` |
++| `LDG` / `STG` | identical in every field selection reads | Min-cost broke the tie by declaration order and chose `LDG` for stores; the emulator executed a store as a load | `direction: load` / `direction: store` |
++
++`toyisa2`'s `LDG`/`LDS2D` are genuine global→scratch moves and correctly remain
++`rule: memory` — the contrast is noted in the schema.
++
++## New schema-language feature: instruction direction
++
++Adding `direction` was the only way to fix the `LDG`/`STG` tie: renaming or
++re-costing either one would just move which of the two wins.
++
++* `Instruction.direction` (`load` | `store` | `None`) and `Instruction.serves()`.
++  `None` serves both, so `toyisa1` and `toyisa2` needed no edit.
++* `enumerate_candidates` records a direction mismatch as a **rejection** with a
++  reason, not a pre-filter — `contracts/selector.md` postcondition 1 says nothing
++  is pre-filtered, and "STG is not a load" belongs in the audit trail beside the
++  cost-based rejections.
++* `assemble._direction` derives it from the operation name: `tt.load` reads
++  through its pointer operand, `tt.store` writes through its own, and nothing in
++  the descriptor carries that. Threaded through `_call_selector`, which already
++  dispatches by arity, so stand-in selectors are unaffected.
++* `validate_schema` rejects any other value.
++
++## Other fixes
++
++* **`cli.py` imported `triton_toyisa.emit.serialize`, which does not exist** —
++  `--out` crashed every time. Corrected to `emit.disasm`. The CLI was rewritten:
++  a refusal is now a diagnostic with exit status 1 and named reasons, not an
++  uncaught emulator traceback. Successful compiles print the parity result
++  against the derived tolerance.
++* **`test_end_to_end.py` asserted `ctx.unsupported == []` for `t3_modulo`** —
++  encoding the miscompile as the expected behaviour. Rewritten: t3 refusal is now
++  asserted on all three ISAs, along with the refusal reason and the fact that a
++  refused program is never executed.
++* **Zero-valued writes were discarded.** The grid merge used
++  `where=value != 0`, so a program that legitimately wrote `0.0` was treated as
++  not having written at all. Tier 2's ReLU clamps roughly half its output to
++  exactly zero. Output buffers are now NaN-initialised so "written" is
++  distinguishable from "untouched", and anything left NaN propagates into the
++  error instead of being quietly zero-filled.
++* **Execution failures are recorded, not raised.** `lower_text` promises never to
++  raise; an emulator failure after a successful lowering is now recorded on
++  `RunContext.execution_error`, kept deliberately distinct from `unsupported` so
++  a pipeline defect cannot be reported as a limitation of the ISA.
++* **Lint: 36 errors → 0.** `E741` fixed properly (renamed `l`); `E402` scoped
++  per-file for the three scripts that put the project on `sys.path` before
++  importing from it, matching the convention already in `pyproject.toml`.
++* **`F821 Undefined name 'violations'`** in `schema.py`, introduced during this
++  pass and caught by lint before it shipped.
++
++## Verified state
++
++```
++              t0_vecadd    t1_matmul      t2_matmul_relu   t3_modulo
++toyisa1       err 0.0      3.03e-4 OK     see G2           REFUSED
++toyisa2       err 0.0      3.03e-4 OK     see G2           REFUSED
++vortex_rvgpu  lowers       lowers         lowers           REFUSED
++```
++
++Tolerance is derived, never hardcoded: `K · (2·2⁻¹¹ + 2⁻²⁴)` = 0.0625 for K=64
++on the tf32 path, `K · 2⁻²⁴` otherwise, read from the kernel's own declared
++`inputPrecision`.
++
++* `python3 run_tests.py` — **74 passed, 0 failed, 0 errors, 1 skipped**
++  (was 63 passed, with the t3 miscompile asserted as correct)
++* `python3 -m ruff check .` — **All checks passed**
++* `python3 tools/snapshot_fixtures.py --check` — 4 fixtures, 182 ops, canon OK
++
++`test_selection_differs_across_isas` fails if any two ISAs produce the same
++instruction names at the same cost, which is what makes the transfer claim
++falsifiable rather than asserted.
++
++## Not done
++
++See `KNOWN_GAPS.md`. In short: `vortex_rvgpu` lowers on every tier but cannot yet
++execute (its per-operation elementwise instructions share one rule and one cost,
++so everything lowers to `VADD` — the fix is an `ops` filter shaped exactly like
++the `direction` one, and `Instruction.ops` is already parsed), and
++`t2_matmul_relu` parity sits at 1.0575 against a 0.0625 bound, isolated to the
++epilogue. Neither is asserted as passing and the tolerance was not widened to
++hide the second.
++
++No GPU was available in this environment; nothing here is GPU-verified.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/KNOWN_GAPS.md out/KNOWN_GAPS.md
+--- a/KNOWN_GAPS.md	1970-01-01 00:00:00.000000000 +0000
++++ b/KNOWN_GAPS.md	2026-09-17 18:58:58.922778750 +0000
+@@ -0,0 +1,149 @@
++# Known gaps
++
++Things this tree does not currently do, recorded so they are findings rather
++than surprises. Each one is reachable from a test or a command, so none of them
++can quietly stop being true.
++
++## G1 — `vortex_rvgpu` lowers but does not execute
++
++**Status:** lowering verified; execution blocked on one remaining schema-language
++feature. The original cause (directional memory) is **fixed**; a second, distinct
++cause remains.
++
++### Fixed: directional memory instructions
++
++`vortex_rvgpu` splits global memory into `LDG` (load) and `STG` (store). The two
++were identical in every field selection reads, so `select` — which takes the
++minimum cost and breaks ties by declaration order — chose `LDG` for stores as
++well as loads, and the emulator executed a store as a load.
++
++Instructions may now declare `direction: load | store`. `Instruction.serves()`
++answers whether an instruction can lower an access in a given direction,
++`enumerate_candidates` records a direction mismatch as a *rejection* (so it lands
++in the audit trail beside the cost-based ones rather than being pre-filtered),
++and `assemble._direction` derives the direction from the operation name —
++`tt.load` reads through its pointer operand, `tt.store` writes through its own,
++and nothing in the descriptor carries that. An instruction that declares no
++direction serves both, so `toyisa1` and `toyisa2` needed no edit.
++
++Verified: `t0_vecadd` on `vortex_rvgpu` now emits `LDG` for both loads and `STG`
++(roles `dst`/`value`, no `defs`) for the store.
++
++### Remaining: elementwise instructions are named but selected only by cost
++
++`vortex_rvgpu` names its elementwise unit per operation — `VADD`, `VMUL`, `VSUB`,
++`VMOD`, `VRELU`, `VCLAMP` — but they share the `elementwise` rule and the same
++`0.05 * words` cost. Selection enumerates by rule and takes the minimum, so
++**every** elementwise operation lowers to `VADD`: the `tt.splat` that builds a
++pointer vector, the `tt.make_range`, the `tt.addptr`, the `arith.cmpi`. The
++emulator then executes each as an addition, `%x_4` comes back a scalar instead of
++a 1024-element pointer vector, and the following `LDG` fails to reshape size 1
++into `(1024,)`.
++
++`toyisa1` and `toyisa2` avoid this by having a single catch-all elementwise
++instruction (`EPI`, `VPU`) whose behaviour the emulator takes from the
++instruction's `source_ops` provenance. That is the "EPI overloading" the project
++documentation lists as an abstraction leak — but it is what makes those two ISAs
++executable, and Vortex's more honest per-operation naming is what exposes the
++missing feature.
++
++**The fix is the same shape as the direction fix, one level up.**
++`Instruction.ops` already exists and is already parsed from YAML (`ops=tuple(
++entry.get("op", ()))`), so the schema can already say `ops: [arith.addf]` on
++`VADD`. What is missing is the filter: `enumerate_candidates` needs to reject an
++instruction whose declared `ops` do not include the source operation, exactly as
++it now rejects one whose `direction` does not match, and `assemble._select` needs
++to pass `op.name` through. Re-costing the elementwise instructions would only
++move which one wins the tie.
++
++Until then `lower_text` records the failure on the result as
++`RunContext.execution_error` rather than raising, and keeps it distinct from
++`unsupported`: a kernel the ISA cannot express and a program the emulator choked
++on are different findings, and collapsing them would let a pipeline defect be
++reported as a limitation of the ISA.
++
++Reproduce:
++
++```bash
++PYTHONPATH=src python3 -c "
++from triton_toyisa.lower import lower_fixture
++c = lower_fixture('t0_vecadd', isa_name='vortex_rvgpu')
++print('lowered:', c.fully_lowered, '| execution_error:', c.execution_error)"
++```
++
++## G2 — Tier 2 parity is outside its derived tolerance
++
++**Status:** open, quantified.
++
++`t2_matmul_relu` lowers cleanly on `toyisa1` and `toyisa2` and its output is
++correctly non-negative (`TestReluEpilogue` asserts this), but its maximum
++relative error against the fp64 reference is **1.0575** against a derived
++tolerance of **0.0625**.
++
++It is specific to the epilogue: `t1_matmul` is the same matmul without the ReLU
++and lands at 3.03e-4, comfortably inside the same bound. So the reduction and the
++accumulation are right and something in the post-loop elementwise stage is not.
++
++This is deliberately **not** asserted as passing. `TestNumericalParity` covers
++t0 and t1; t2 is covered for lowering and for non-negativity only. Do not widen
++the tolerance to make it green — the tolerance is derived from the reduction
++length and the declared precision (`_tolerance` in `lower.py`), and a number
++chosen to fit the result is not a bound.
++
++Reproduce:
++
++```bash
++PYTHONPATH=src python3 -c "
++from triton_toyisa.lower import lower_fixture
++c = lower_fixture('t2_matmul_relu', isa_name='toyisa1')
++print(f'err={c.parity_max_rel_err:.6g} tol={c.tolerance:.6g}')"
++```
++
++## G3 — the corpus is four frozen fixtures
++
++TTIR is read from `fixtures/*.ttir`, checked in and regenerated manually via
++`make fixtures` (which needs Triton). There is no live interception of an
++arbitrary `torch.compile` graph in this tree. That keeps the whole suite
++runnable with neither Triton nor torch installed, which is the trade being made
++on purpose — but it does mean "works on any PyTorch model" is not a claim this
++tree supports.
++
++## G4 — no GPU verification was performed in this environment
++
++Any GPU-anchored numbers quoted elsewhere in the project's documentation were
++not reproduced here; no accelerator was present. Everything in this file and in
++the test suite is CPU-only and reproducible offline.
++
++## G5 — the C++ emulator backend is present but unwired
++
++**Status:** sources shipped, never built, never called.
++
++`src/triton_toyisa/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
++`precision.h`, `ir_types.h`, `errors.h`) and a top-level `CMakeLists.txt` are in
++the tree. Nothing builds them and, until this merge, nothing could have used
++them:
++
++* `pyproject.toml` declares `build-backend = "setuptools.build_meta"`. A
++  `pip install .` never invokes CMake, so `_emu_cpp` is never produced.
++* `emu/__init__.py` did not define `HAS_CPP`, so `tests/unit/test_emu_cpp.py`
++  raised `ImportError` at collection and reported as a hard ERROR rather than a
++  skip.
++* `emu.exec.emulate()` had no `use_cpp` parameter, so both `test_emu_cpp.py` and
++  `test_mvp_integration.py` called it with a keyword it did not accept.
++
++Fixed in this merge, up to the build itself:
++
++* `emu/__init__.py` now defines `HAS_CPP`, guarded, as the single place anything
++  asks whether the extension is available.
++* `emulate(..., use_cpp=...)` routes: `None` prefers C++ when built, `False`
++  forces the NumPy reference path, `True` **raises** when the extension is
++  absent rather than quietly answering with NumPy's numbers under a flag that
++  asked for C++ — a parity test that silently falls back proves nothing.
++* `tests/unit/test_emu_cpp.py` was converted from pytest to stdlib `unittest`
++  (pytest is not a dependency; `run_tests.py` is the runner). All seven cases are
++  preserved and now skip cleanly instead of erroring.
++
++**Still to do:** switch the build backend to `scikit-build-core` so
++`pip install .` compiles the extension, then run the parity suite with it built.
++Until then `HAS_CPP` is `False` everywhere and the C++ path is dead code — it
++should not be cited as a result.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/bench/adapter.py out/bench/adapter.py
+--- a/bench/adapter.py	2026-09-17 18:46:35.000000000 +0000
++++ b/bench/adapter.py	2026-09-17 18:54:38.118437698 +0000
+@@ -16,14 +16,13 @@
+ 
+ from __future__ import annotations
+ 
++import sys
+ from dataclasses import dataclass, field
++from pathlib import Path
+ from typing import Any
+ 
+ import numpy as np
+ 
+-from pathlib import Path
+-import sys
+-
+ ROOT = Path(__file__).resolve().parent.parent
+ if str(ROOT / "src") not in sys.path:
+     sys.path.insert(0, str(ROOT / "src"))
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/pyproject.toml out/pyproject.toml
+--- a/pyproject.toml	2026-09-17 18:46:35.000000000 +0000
++++ b/pyproject.toml	2026-09-17 18:54:38.119620390 +0000
+@@ -54,6 +54,12 @@
+ "tests/contract/test_torch_seam.py" = ["F401"]
+ "tests/contract/test_raw_module.py" = ["F841"]
+ "src/triton_toyisa/ttir/parser.py" = ["SIM102"]
++# Scripts that put the project on `sys.path` before importing from it. The
++# imports genuinely cannot precede that, so E402 here is the rule being wrong
++# about a standalone script rather than the script being wrong.
++"tools/demo_live.py" = ["E402"]
++"verify/verify_defuse_graph.py" = ["E402"]
++"verify/verify_end_to_end.py" = ["E402"]
+ 
+ [tool.coverage.run]
+ source = ["src/triton_toyisa"]
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/run_tests.py out/run_tests.py
+--- a/run_tests.py	2026-09-17 18:46:35.000000000 +0000
++++ b/run_tests.py	2026-09-17 18:54:38.120748562 +0000
+@@ -64,23 +64,23 @@
+     suite = build_suite(suite_choice, pattern=args.pattern)
+ 
+     count = suite.countTestCases()
+-    print(f"============================================================")
++    print("============================================================")
+     print(f"  triton_toyisa test runner (unittest) — {count} test cases")
+     print(f"  Suite: {args.suite} | Pattern: {args.pattern}")
+-    print(f"============================================================")
++    print("============================================================")
+ 
+     start_time = time.perf_counter()
+     runner = unittest.TextTestRunner(verbosity=2 if args.verbose else 1)
+     result = runner.run(suite)
+     elapsed = time.perf_counter() - start_time
+ 
+-    print(f"\n------------------------------------------------------------")
++    print("\n------------------------------------------------------------")
+     print(f"Ran {result.testsRun} tests in {elapsed:.3f}s")
+     print(f"  Passed:   {result.testsRun - len(result.failures) - len(result.errors) - len(result.skipped)}")
+     print(f"  Failed:   {len(result.failures)}")
+     print(f"  Errors:   {len(result.errors)}")
+     print(f"  Skipped:  {len(result.skipped)}")
+-    print(f"------------------------------------------------------------")
++    print("------------------------------------------------------------")
+ 
+     return 0 if result.wasSuccessful() else 1
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/cli.py out/src/triton_toyisa/cli.py
+--- a/src/triton_toyisa/cli.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/cli.py	2026-09-17 18:54:38.121916821 +0000
+@@ -1,48 +1,94 @@
++"""`toyisa` — the command-line entry point declared in `pyproject.toml`.
++
++Two subcommands:
++
++    toyisa extract --out DIR          regenerate fixtures with Triton (needs Triton)
++    toyisa compile FIXTURE [--schema] lower one .ttir to a target ISA
++
++`compile` prints what the pipeline decided and exits non-zero when the kernel was
++refused. A refusal is a *diagnostic*, not a crash: the previous version let an
++emulator exception reach the terminal as an uncaught traceback, which made a
++kernel the ISA legitimately cannot express look identical to a compiler bug.
++"""
++
++from __future__ import annotations
++
+ import argparse
+ import sys
+ from pathlib import Path
+ 
+-from triton_toyisa.lower import lower_fixture
+ 
++def _compile(args: argparse.Namespace) -> int:
++    from triton_toyisa.lower import lower_fixture
+ 
+-def main():
+-    parser = argparse.ArgumentParser(prog="triton_toyisa")
+-    subparsers = parser.add_subparsers(dest="command")
++    schema = Path(args.schema).stem if args.schema else "toyisa1"
++    try:
++        context = lower_fixture(args.fixture, isa_name=schema)
++    except FileNotFoundError:
++        print(f"no such ISA schema: {schema}", file=sys.stderr)
++        return 2
++
++    if context.unsupported:
++        print(f"{args.fixture}: refused by the {schema} pipeline", file=sys.stderr)
++        for reason in context.unsupported:
++            print(f"  {reason}", file=sys.stderr)
++        # Refused is a real answer, and the exit status says so. It is 1 rather
++        # than 0 so a script can branch on it, and it is not 2 because nothing
++        # was used incorrectly.
++        return 1
++
++    print(
++        f"compiled {args.fixture} -> {schema}: "
++        f"{context.emitted_instructions} instruction(s), cost={context.total_cost}"
++    )
++    if context.parity_max_rel_err is not None and context.tolerance is not None:
++        verdict = "within" if context.parity_max_rel_err <= context.tolerance else "OUTSIDE"
++        print(
++            f"  parity: max relative error {context.parity_max_rel_err:.6g} "
++            f"{verdict} derived tolerance {context.tolerance:.6g}"
++        )
++    if args.out and context.program is not None:
++        from triton_toyisa.emit.disasm import serialize
++
++        Path(args.out).write_text(serialize(context.program), encoding="utf-8")
++        print(f"  wrote {args.out}")
++    return 0
++
++
++def _extract(args: argparse.Namespace) -> int:
++    from triton_toyisa.harness.extract_fixtures import extract
++
++    if args.check_gate:
++        print("GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]")
++        return 0
++    extract(args.out, args.force)
++    return 0
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(prog="toyisa")
++    sub = parser.add_subparsers(dest="command")
+ 
+-    extract_parser = subparsers.add_parser("extract")
++    extract_parser = sub.add_parser("extract", help="regenerate fixtures with Triton")
+     extract_parser.add_argument("--out", required=True)
+     extract_parser.add_argument("--force", action="store_true")
+     extract_parser.add_argument("--check-gate", action="store_true")
+ 
+-    compile_parser = subparsers.add_parser("compile")
+-    compile_parser.add_argument("fixture", help="Path to .ttir fixture")
+-    compile_parser.add_argument("--schema", default="vortex_rvgpu", help="ISA schema name or path")
+-    compile_parser.add_argument("--out", default=None, help="Output program path")
++    compile_parser = sub.add_parser("compile", help="lower a .ttir file to a target ISA")
++    compile_parser.add_argument("fixture", help="path to a .ttir file, or a corpus tier name")
++    compile_parser.add_argument(
++        "--schema", default="toyisa1", help="ISA schema name (toyisa1, toyisa2, vortex_rvgpu)"
++    )
++    compile_parser.add_argument("--out", default=None, help="write the serialised program here")
+ 
+     args = parser.parse_args()
+-
++    if args.command == "compile":
++        return _compile(args)
+     if args.command == "extract":
+-        from triton_toyisa.harness.extract_fixtures import extract
+-        if args.check_gate:
+-            print("GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]")
+-            return
+-        extract(args.out, args.force)
+-    elif args.command == "compile":
+-        schema = Path(args.schema).stem if args.schema else "vortex_rvgpu"
+-        ctx = lower_fixture(args.fixture, isa_name=schema)
+-        if ctx.unsupported:
+-            print(f"Compilation failed: {ctx.unsupported}", file=sys.stderr)
+-            sys.exit(1)
+-        if args.out and ctx.program:
+-            from triton_toyisa.emit.serialize import serialize
+-            Path(args.out).write_text(serialize(ctx.program), encoding="utf-8")
+-            print(f"Compiled to {args.out} (cost={ctx.total_cost})")
+-        else:
+-            print(f"Successfully compiled {args.fixture} (cost={ctx.total_cost}, instrs={ctx.emitted_instructions})")
+-    else:
+-        parser.print_help()
+-        sys.exit(1)
++        return _extract(args)
++    parser.print_help()
++    return 1
+ 
+ 
+ if __name__ == "__main__":
+-    main()
++    raise SystemExit(main())
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/emit/assemble.py out/src/triton_toyisa/emit/assemble.py
+--- a/src/triton_toyisa/emit/assemble.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/emit/assemble.py	2026-09-17 18:54:38.122988945 +0000
+@@ -607,7 +607,7 @@
+             "is not the target ISA's limitation, so it must not be reported as one"
+         )
+     selection = _call_selector(
+-        selector, schema, binding.kind, binding.descriptor, binding.tile, env
++        selector, schema, binding.kind, binding.descriptor, binding.tile, env, _direction(op)
+     )
+     # `aligned(X, k)` decides against the ACTIVE machine's allocator promise:
+     # selection is per-schema, and a second machine may promise differently.
+@@ -682,6 +682,24 @@
+     return "rejected with no predicate recorded (selector.md postcondition 2)"
+ 
+ 
++#: Which way an access moves data, by the operation that performs it. `tt.load`
++#: reads through its pointer operand and `tt.store` writes through its own, so
++#: the *operation name* is what says direction; nothing in the descriptor does.
++_DIRECTION_OF_OP = {"tt.load": "load", "tt.store": "store"}
++
++
++def _direction(op: Operation) -> str | None:
++    """`load`, `store`, or `None` for an operation that is not a memory access.
++
++    Passed to the selector so an ISA that splits global memory into directional
++    instructions can have the wrong one rejected. Vortex declares LDG and STG
++    identically in every field selection reads, so without this the minimum-cost
++    rule broke the tie by declaration order and chose LDG for stores as well as
++    loads -- and the emulator then executed a store as a load.
++    """
++    return _DIRECTION_OF_OP.get(op.name)
++
++
+ def _call_selector(
+     selector: object,
+     schema: object,
+@@ -689,6 +707,7 @@
+     descriptor: object,
+     tile: tuple[int, ...] | None,
+     env: dict[str, int] | None,
++    direction: str | None = None,
+ ) -> object:
+     """Call the selector with the arguments its signature accepts.
+ 
+@@ -698,7 +717,7 @@
+     taking (schema, kind, descriptor, tile[, env])", and the caller decides by
+     signature, so neither side needs to know the other exists.
+     """
+-    args = (schema, kind, descriptor, tile, env)
++    args = (schema, kind, descriptor, tile, env, direction)
+     limit = _positional_arity(selector)
+     if limit is None or limit >= len(args):
+         return selector(*args)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/emu/__init__.py out/src/triton_toyisa/emu/__init__.py
+--- a/src/triton_toyisa/emu/__init__.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/emu/__init__.py	2026-09-17 18:56:42.562770645 +0000
+@@ -3,3 +3,19 @@
+ No NumPy dtype magic is hidden here: the precision policy is explicit and
+ recorded per dtype (FR-021, FR-022).
+ """
++
++# The optional C++ backend. `HAS_CPP` is the single place anything asks whether
++# it is available, so a caller never has to guess from an ImportError.
++#
++# The extension is NOT built by `pip install .`: `pyproject.toml` uses the plain
++# setuptools backend, so `CMakeLists.txt` and `emu/cpp/` are never compiled, and
++# `emu.exec.emulate` has no `use_cpp` parameter to route to them. The C++ sources
++# are therefore present but unwired — see KNOWN_GAPS.md G5. This flag is
++# deliberately still defined rather than hardcoded to False, so that wiring the
++# build up later is a build-system change and not a source change.
++try:  # pragma: no cover - exercised only where the extension is built
++    from ._emu_cpp import HAS_CPP as HAS_CPP
++except ImportError:
++    HAS_CPP = False
++
++__all__ = ["HAS_CPP"]
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/emu/exec.py out/src/triton_toyisa/emu/exec.py
+--- a/src/triton_toyisa/emu/exec.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/emu/exec.py	2026-09-17 18:58:00.137739984 +0000
+@@ -629,12 +629,42 @@
+     policy: PrecisionPolicy | None = None,
+     *,
+     grid: tuple[int, ...] = (0, 0, 0),
++    use_cpp: bool | None = None,
+ ) -> dict[str, np.ndarray]:
+     """Execute `program` and return every buffer it wrote (postcondition 1).
+ 
+     `UNSUPPORTED` halts locally with :class:`ProgramNotExecutable`; the caller
+     routes that kernel to the eager fallback (postcondition 2).
++
++    `use_cpp` selects the backend:
++
++    * `None` (default) -- the C++ extension when it is built, else NumPy. This
++      is the "go faster if you can" case and it must never change the answer.
++    * `True` -- require the C++ extension; raise if it is not built, rather than
++      silently returning NumPy's numbers under a flag that asked for C++. A
++      parity test that falls back is a parity test that proves nothing.
++    * `False` -- force the NumPy reference path, which is what the other half of
++      a parity comparison needs.
++
++    The extension is not built by `pip install .` today (KNOWN_GAPS.md G5), so
++    the default resolves to NumPy in a normal checkout.
+     """
++    from . import HAS_CPP
++
++    if use_cpp and not HAS_CPP:
++        raise ProgramNotExecutable(
++            "use_cpp=True but the C++ backend is not built; refusing to answer "
++            "with the NumPy path under a flag that asked for C++"
++        )
++    if use_cpp is None and HAS_CPP:  # pragma: no cover - needs the built extension
++        from ._emu_cpp import emulate as cpp_emulate
++
++        return cpp_emulate(program, inputs, policy, grid=grid)
++    if use_cpp:  # pragma: no cover - needs the built extension
++        from ._emu_cpp import emulate as cpp_emulate
++
++        return cpp_emulate(program, inputs, policy, grid=grid)
++
+     markers = program.markers()
+     if markers:
+         raise ProgramNotExecutable(markers[0])
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/isa/schema.py out/src/triton_toyisa/isa/schema.py
+--- a/src/triton_toyisa/isa/schema.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/isa/schema.py	2026-09-17 18:54:38.124090113 +0000
+@@ -1008,8 +1008,24 @@
+     accumulate: AccumulateSpec | None = None
+     tile: dict[str, int] | None = None
+     ops: tuple[str, ...] = ()
++    #: `load`, `store`, or `None` for an instruction that serves both. An ISA
++    #: may split global memory into directional instructions (Vortex's LDG/STG);
++    #: when it does, the two are otherwise identical in every field selection
++    #: reads, so without this the minimum-cost rule resolves the tie by
++    #: declaration order and picks the load for stores as well. `None` is the
++    #: direction-agnostic case (toyisa1's DMA1D: `dst[0:length] = src[0:length]`),
++    #: where the emitter carries direction in the operand roles instead.
++    direction: str | None = None
+     declaration_index: int = 0
+ 
++    def serves(self, direction: str | None) -> bool:
++        """Can this instruction lower an access in `direction`?
++
++        An undeclared direction serves both, so an ISA that does not make the
++        distinction is unaffected and needs no edit.
++        """
++        return self.direction is None or direction is None or self.direction == direction
++
+     def admissible_for(
+         self,
+         descriptor: object,
+@@ -1076,8 +1092,20 @@
+ 
+ DEFAULT_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schemas", "toyisa1.yaml")
+ 
+-_KINDS = ("memory", "compute")
+-_RULES = ("memory", "mac", "elementwise")
++# `control`/`barrier` names the class of instruction that sequences execution
++# rather than moving or computing a value — a fence. It is deliberately a class
++# of its own rather than a `memory` instruction with an unusual cost, because
++# `select.enumerate_candidates` builds its candidate set from `of_kind(kind)`:
++# anything declared `memory` competes with the real loads and stores for every
++# `tt.load` and `tt.store`. Vortex's BARRIER was declared that way, and with a
++# trivially-true constraint and a flat 0.01 cost it won every memory selection
++# on minimum cost — so each load and store lowered to a fence and the emitted
++# program moved no data. No recognition rule emits `barrier`, so an instruction
++# in this class is declarable, validated and costed, but never selected for an
++# operand: exactly the semantics a fence needs.
++_KINDS = ("memory", "compute", "control")
++_RULES = ("memory", "mac", "elementwise", "barrier", "scratch")
++_DIRECTIONS = (None, "load", "store")
+ _SPACE_KINDS = ("flat", "scratchpad", "accumulator")
+ _ORDERS = ("k_major_sequential", "k_blocked")
+ 
+@@ -1190,6 +1218,7 @@
+             accumulate=accumulate,
+             tile=dict(tile_raw) if isinstance(tile_raw, dict) else None,
+             ops=tuple(entry.get("op", ())),
++            direction=(str(entry["direction"]) if entry.get("direction") else None),
+             declaration_index=index,
+         )
+ 
+@@ -1253,6 +1282,13 @@
+             # The coarse `kind` axis cannot drive selection (module docstring);
+             # a schema that omits `rule` falls back to it only for compute.
+             instruction = _with_rule(instruction)
++        if instruction.direction not in _DIRECTIONS:
++            problems.append(
++                SchemaViolation(
++                    f"{path}.direction",
++                    f"{instruction.direction!r} is not one of {_DIRECTIONS}",
++                )
++            )
+         if instruction.rule not in _RULES:
+             problems.append(
+                 SchemaViolation(f"{path}.rule", f"{instruction.rule!r} is not one of {_RULES}")
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/isa/schemas/vortex_rvgpu.yaml out/src/triton_toyisa/isa/schemas/vortex_rvgpu.yaml
+--- a/src/triton_toyisa/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:54:38.125212287 +0000
+@@ -27,6 +27,7 @@
+ instructions:
+   - name: LDG
+     kind: memory
++    direction: load
+     rule: memory
+     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
+     time: {expr: "words / 2.0", unit: word}
+@@ -36,6 +37,7 @@
+ 
+   - name: STG
+     kind: memory
++    direction: store
+     rule: memory
+     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
+     time: {expr: "words / 2.0", unit: word}
+@@ -43,9 +45,22 @@
+     constraint: "in_bounds(base, length)"
+     semantics: "global[base:base+length] = src[0:length]"
+ 
++  # LDS/STS move data *within* the scratchpad: their semantics read `scratch[...]`
++  # and never touch global memory, so they are not a valid single-instruction
++  # lowering of a `tt.load` or `tt.store` against a global pointer -- the data
++  # would have to be staged into scratch first. Declared `rule: memory` (as they
++  # were) they joined the candidate set for every global load and store, and at
++  # 0.10/word against LDG/STG's 0.50/word they won every selection on minimum
++  # cost. The emitted program then read a scratchpad buffer nothing had filled,
++  # which surfaced as the emulator being handed a size-1 buffer. `rule: scratch`
++  # keeps them declared, validated and costed while making them inadmissible for
++  # an operand no recognition rule maps to that rule -- the same treatment
++  # BARRIER gets. Contrast toyisa2's LDG/LDS2D, which are genuine global->scratch
++  # moves and so are correctly `rule: memory`.
+   - name: LDS
+     kind: memory
+-    rule: memory
++    direction: load
++    rule: scratch
+     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
+     time: {expr: "words / 8.0", unit: word}
+     cost: {expr: "0.10 * words", unit: word}
+@@ -54,7 +69,8 @@
+ 
+   - name: STS
+     kind: memory
+-    rule: memory
++    direction: store
++    rule: scratch
+     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
+     time: {expr: "words / 8.0", unit: word}
+     cost: {expr: "0.10 * words", unit: word}
+@@ -139,9 +155,18 @@
+     constraint: "aligned(base, 4)"
+     semantics: "dst[i] = min(max(lo, src[i]), hi)"
+ 
++  # BARRIER is a synchronisation instruction, not a memory-movement one. It was
++  # previously declared `kind: memory, rule: memory`, which put it in the
++  # candidate set the selector enumerates for every `tt.load` and `tt.store`.
++  # With a trivially-true constraint (`aligned(base, 1)`) and a flat cost of
++  # 0.01 it then won *every* memory selection on min-cost, so each load and
++  # store in each kernel lowered to a barrier and the emitted program moved no
++  # data at all. `kind: control` keeps it declarable and costed without making
++  # it admissible for a memory operand: no ttir operation maps to the `barrier`
++  # rule, so it is never selected, which is the correct behaviour for a fence.
+   - name: BARRIER
+-    kind: memory
+-    rule: memory
++    kind: control
++    rule: barrier
+     addressing: {form: register}
+     time: {expr: "1.0", unit: cycle}
+     cost: {expr: "0.01", unit: ctrl}
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/isa/select.py out/src/triton_toyisa/isa/select.py
+--- a/src/triton_toyisa/isa/select.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/isa/select.py	2026-09-17 18:54:38.126344005 +0000
+@@ -44,6 +44,7 @@
+     descriptor: object,
+     tile: tuple[int, ...] | None = None,
+     env: dict[str, int] | None = None,
++    direction: str | None = None,
+ ) -> tuple[Candidate, ...]:
+     """Every instruction of `kind` against this operand, including rejected ones.
+ 
+@@ -66,6 +67,24 @@
+ 
+     out: list[Candidate] = []
+     for instruction in schema.of_kind(kind):
++        # Direction is checked before the predicate, and recorded as a rejection
++        # rather than a filter, because postcondition 1 says nothing is
++        # pre-filtered: "STG is not a load" belongs in the audit trail next to
++        # the cost-based rejections. An instruction that declares no direction
++        # serves both, so an ISA that does not split loads from stores sees no
++        # change at all.
++        serves = getattr(instruction, "serves", None)
++        if direction is not None and callable(serves) and not serves(direction):
++            out.append(
++                Candidate(
++                    instruction,
++                    False,
++                    f"declared direction {getattr(instruction, 'direction', None)!r} "
++                    f"cannot lower a {direction}",
++                    None,
++                )
++            )
++            continue
+         verdict = evaluate(reason_of(instruction), descriptor, tile, env)
+         if verdict is True:
+             cost: float | None = cost_of(instruction, descriptor, tile, env)
+@@ -83,6 +102,7 @@
+     descriptor: object,
+     tile: tuple[int, ...] | None = None,
+     env: dict[str, int] | None = None,
++    direction: str | None = None,
+ ) -> SelectionReport:
+     """Minimum cost among the admissible; no default fallback.
+ 
+@@ -93,10 +113,10 @@
+     Postcondition 5: `oracle_min` runs the same enumeration the other way, and
+     the gap is reported, not hidden (SC-005, EC-072).
+     """
+-    candidates = enumerate_candidates(schema, kind, descriptor, tile, env)
++    candidates = enumerate_candidates(schema, kind, descriptor, tile, env, direction)
+     admissible = [c for c in candidates if c.admissible and c.cost is not None]
+     if not admissible:
+-        oracle = oracle_min(schema, kind, descriptor, tile, env)
++        oracle = oracle_min(schema, kind, descriptor, tile, env, direction)
+         return SelectionReport(
+             chosen=None,
+             chosen_cost=None,
+@@ -112,7 +132,7 @@
+     # depending on an attribute the stand-in does not carry.
+     order = {id(c.instruction): i for i, c in enumerate(candidates)}
+     best = min(admissible, key=lambda c: (c.cost, order[id(c.instruction)]))
+-    oracle = oracle_min(schema, kind, descriptor, tile, env)
++    oracle = oracle_min(schema, kind, descriptor, tile, env, direction)
+     gap = max(0.0, (best.cost or 0.0) - (oracle.oracle_min_cost or 0.0))
+     return SelectionReport(
+         chosen=best.instruction,
+@@ -131,6 +151,7 @@
+     descriptor: object,
+     tile: tuple[int, ...] | None = None,
+     env: dict[str, int] | None = None,
++    direction: str | None = None,
+ ) -> SelectionReport:
+     """The exhaustive oracle: same enumeration, optimum reported separately.
+ 
+@@ -140,7 +161,7 @@
+     *report* carries the oracle column and a future ISA with coupled costs
+     (ISA-2's bank moves) cannot silently drop the comparison (SC-005).
+     """
+-    candidates = enumerate_candidates(schema, kind, descriptor, tile, env)
++    candidates = enumerate_candidates(schema, kind, descriptor, tile, env, direction)
+     admissible = [c for c in candidates if c.admissible and c.cost is not None]
+     if not admissible:
+         return SelectionReport(
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/src/triton_toyisa/lower.py out/src/triton_toyisa/lower.py
+--- a/src/triton_toyisa/lower.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/triton_toyisa/lower.py	2026-09-17 18:54:38.127415568 +0000
+@@ -1,30 +1,97 @@
+-"""End-to-end compiler lowering pipeline.
++"""End-to-end lowering: Triton IR text -> a target-ISA `Program`, then execution.
+ 
+-Compiles Triton IR (TTIR) through access descriptor recognition and instruction
+-selection to target ISA programs, and executes with numerical validation.
++This module is the shipped, torch-free entry point to the compiler. Every stage
++it runs is the production one:
++
++    parse_module -> build_def_use -> annotate -> assemble(schema, selector)
++
++Nothing here decides what a kernel lowers to. The recogniser resolves memory
++operands to access descriptors, the schema declares the candidate instructions
++with their admissibility predicates and costs, and `isa.select.select` picks the
++minimum-cost admissible one. Changing the target ISA means passing a different
++`isa_name`; it does not mean taking a different branch in this file.
++
++That is worth stating because the previous version of this module did the
++opposite. It was a lookup table keyed on the fixture's *name*:
++
++    if tier == "t0_vecadd":
++        instrs = [Instr(name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D", ...
++
++Every instruction, operand and cost was a literal, "cross-ISA transfer" was a
++ternary on a string, and `unsupported=[]` was hardcoded -- so `t3_modulo`, the
++corpus's negative control, reported a successful compile to a `VMOD`
++instruction instead of being refused for its modulo wraparound. The recogniser,
++the schema and the selector were imported nowhere in the file despite the
++docstring naming all three. A tier/ISA pair the table got wrong (t1 on toyisa1)
++emitted a `DMA1D` carrying no memory operand, which the emulator refused at run
++time with an uncaught `UnsupportedInstruction` traceback.
++
++The public surface is unchanged: `make_inputs`, `compute_reference`,
++`lower_fixture` and `RunContext` keep the names and fields their callers
++(`cli.py`, `bench/adapter.py`, `verify/verify_end_to_end.py`, the contract
++tests) already use.
+ """
+ 
+ from __future__ import annotations
+ 
++import json
++import re
++from collections.abc import Mapping, Sequence
+ from dataclasses import dataclass, field
+ from pathlib import Path
+ from typing import Any
+ 
+ import numpy as np
+ 
+-from .emit.ir import Imm, Instr, MemRef, Program, SourceRef, SsaRef
++from .emit.ir import Program
+ from .emu.exec import emulate
+ from .emu.hardware import BankConflictUnit, CoalescingUnit, HardwarePerformanceStats
+ from .emu.precision import PrecisionPolicy
++from .idioms.detect import annotate
++from .isa.schema import load_builtin
++from .ttir.graph import build_def_use, walk_region
+ from .ttir.to_ir import parse_module
+ 
+ ROOT = Path(__file__).resolve().parent.parent.parent
+ FIXTURES_DIR = ROOT / "fixtures"
++LAUNCH_ENV_PATH = FIXTURES_DIR / "launch_env.json"
++
++#: Deterministic seed for `make_inputs`. Fixed so a parity number is reproducible
++#: across runs and machines: a bare `np.random` call would make a tolerance
++#: breach unrepeatable, which is the one thing a numeric check cannot afford.
++SEED = 24173
++
++#: The leading integer of a `tt.make_range` `end` attribute. The attribute text
++#: is `"1024 : i32"`, so the match must be anchored and take group 1 -- scraping
++#: every digit yields `102432`, a block wider than the problem, and a grid of
++#: (1, 1, 1) that computes one tile while reporting the whole result.
++_BLOCK_RE = re.compile(r"\s*(\d+)")
++
++#: Operations that define the kernel rather than produce a value. Coverage counts
++#: exclude them, matching the corpus end-to-end check's own definition.
++_NON_PRODUCERS = frozenset({"tt.func", "tt.return", "scf.yield", "scf.for"})
++
++__all__ = [
++    "RunContext",
++    "compute_reference",
++    "launch_env",
++    "lower_fixture",
++    "lower_text",
++    "make_inputs",
++]
+ 
+ 
+ @dataclass
+ class RunContext:
+-    """Benchmark execution context for a lowered kernel."""
++    """The outcome of one lowering: the artifact, its coverage, and its parity.
++
++    `unsupported` is the fail-closed channel. It is non-empty when the pipeline
++    refused the kernel -- a parse diagnostic, or an `UNSUPPORTED` marker naming
++    the operation and the originating `loc`. A refused kernel still carries its
++    `program` and its counts, because "how far did it get before giving up" is
++    what the coverage report asks; what it does not carry is emulator output,
++    because a refused program is not executed.
++    """
+ 
+     tier: str
+     module: Any = None
+@@ -46,307 +113,463 @@
+     hardware_stats: HardwarePerformanceStats | None = None
+     generation_ns: float | None = None
+     parity_max_rel_err: float | None = None
+-
+-
+-def make_inputs(tier: str, seed: int = 24173) -> dict[str, np.ndarray]:
+-    """Deterministic input generation matching frozen fixture shapes."""
++    #: Set when the program lowered but the emulator could not run it. Kept
++    #: distinct from `unsupported`, which means the *compiler* refused: a kernel
++    #: the target ISA cannot express and a program the emulator choked on are
++    #: different findings, and collapsing them would let a pipeline defect be
++    #: reported as a limitation of the ISA.
++    execution_error: str | None = None
++
++    @property
++    def fully_lowered(self) -> bool:
++        """The boolean the coverage report leads with.
++
++        Reported before any percentage on purpose: a kernel that marks one
++        operation at the head of a chain and lowers the rest still scores well
++        on an annotated-node fraction, and is not lowered.
++        """
++        return not self.unsupported and self.program is not None
++
++
++# --------------------------------------------------------------------------- #
++# Corpus inputs and references
++# --------------------------------------------------------------------------- #
++
++#: Buffer shapes per fixture, matching the frozen `launch_env.json` extents.
++_FIXTURE_SHAPES: dict[str, dict[str, tuple[int, ...]]] = {
++    "t0_vecadd": {"x": (1024,), "y": (1024,)},
++    "t1_matmul": {"a": (128, 64), "b": (64, 128)},
++    "t2_matmul_relu": {"a": (128, 64), "b": (64, 128)},
++    "t3_modulo": {"x": (16, 16), "y": (16, 16)},
++}
++
++
++def make_inputs(tier: str, seed: int = SEED) -> dict[str, np.ndarray]:
++    """Deterministic inputs at the fixture's declared buffer extents.
++
++    The extents come from `launch_env.json` (M, N, K), not from the tile shape
++    the kernel loads: the kernel's index arithmetic addresses the whole tensor,
++    so allocating at tile size puts the second program of the grid out of bounds
++    and the emulator refuses it.
++    """
++    try:
++        shapes = _FIXTURE_SHAPES[tier]
++    except KeyError:
++        raise ValueError(f"no declared input shapes for tier {tier!r}") from None
+     rng = np.random.default_rng(seed)
+-    shapes = {
+-        "t0_vecadd": {"x": (1024,), "y": (1024,)},
+-        "t1_matmul": {"a": (64, 32), "b": (32, 64)},
+-        "t2_matmul_relu": {"a": (64, 32), "b": (32, 64)},
+-        "t3_modulo": {"x": (1024,), "y": (1024,)},
+-    }[tier]
+-    return {k: rng.standard_normal(s, dtype=np.float32) for k, s in shapes.items()}
++    return {name: rng.standard_normal(shape, dtype=np.float32) for name, shape in shapes.items()}
+ 
+ 
+ def compute_reference(tier: str, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+-    """Compute gold-standard eager NumPy reference output for each tier."""
++    """Gold-standard eager NumPy reference for one tier.
++
++    The matmul tiers accumulate in float64: the point of the comparison is to
++    measure the emulator's accumulation error against an essentially exact
++    result, and an fp32 reference carries its own error of the same order as the
++    quantity being measured.
++    """
+     if tier == "t0_vecadd":
+         return {"out": inputs["x"] + inputs["y"]}
+-    elif tier == "t1_matmul":
+-        return {"c": inputs["a"] @ inputs["b"]}
+-    elif tier == "t2_matmul_relu":
+-        return {"c": np.maximum(0.0, inputs["a"] @ inputs["b"])}
+-    elif tier == "t3_modulo":
++    if tier == "t1_matmul":
++        return {"c": inputs["a"].astype(np.float64) @ inputs["b"].astype(np.float64)}
++    if tier == "t2_matmul_relu":
++        product = inputs["a"].astype(np.float64) @ inputs["b"].astype(np.float64)
++        return {"c": np.maximum(0.0, product)}
++    if tier == "t3_modulo":
+         return {"out": np.mod(inputs["x"], np.maximum(1.0, np.abs(inputs["y"])))}
+     raise ValueError(f"Unknown tier: {tier}")
+ 
+ 
+-def lower_fixture(tier_or_path: str, isa_name: str = "vortex_rvgpu") -> RunContext:
+-    """End-to-end lowering from a fixture to an executable target Program."""
+-    tier = Path(tier_or_path).stem if ("/" in tier_or_path or tier_or_path.endswith(".ttir")) else tier_or_path
+-    fixture_path = FIXTURES_DIR / f"{tier}.ttir"
+-    if not fixture_path.exists():
+-        fixture_path = Path(tier_or_path)
+-
+-    text = fixture_path.read_text(encoding="utf-8")
+-    parse_res = parse_module(text, source_path=str(fixture_path))
+-    if not parse_res.ok or parse_res.module is None:
+-        ctx = RunContext(tier=tier, unsupported=[str(parse_res.diagnostic)])
+-        return ctx
+-
+-    module = parse_res.module
+-
+-    # Count raw ops in module
+-    raw_ops: list[Any] = []
+-    def collect_ops(region):
+-        for b in region.blocks:
+-            for op in b.operations:
+-                raw_ops.append(op)
+-                for r in op.regions:
+-                    collect_ops(r)
+-    collect_ops(module.body)
+-    raw_op_count = len(raw_ops)
+-
+-    # Count value ops (compute + memory)
+-    compute_memory_names = {
+-        "tt.load", "tt.store", "tt.dot", "arith.addf", "arith.muli", "arith.addi",
+-        "arith.subf", "arith.cmpf", "arith.select", "arith.remsi", "arith.remui"
+-    }
+-    value_ops = sum(1 for op in raw_ops if op.name in compute_memory_names)
+-    annotated_value_ops = value_ops  # 100% lowering coverage
+-
+-    # Instruction selection mapping for target ISA
+-    instrs: list[Instr] = []
+-    total_cost = 0.0
+-
+-    # Initialize hardware modeling units
+-    coalescer = CoalescingUnit(cache_line_bytes=32, warp_size=32)
+-    bank_unit = BankConflictUnit(num_banks=16, bank_width_bytes=4)
+-    hw_stats = HardwarePerformanceStats()
+-
+-    if tier == "t0_vecadd":
+-        # LDG x, LDG y, VADD, STG out
+-        # Coalescing analysis: contiguous 1024 floats -> 100% coalesced
+-        creport = coalescer.analyze(base_address=0, stride_elements=1, element_bytes=4)
+-        hw_stats.dram_bytes_requested += 1024 * 4 * 3
+-        hw_stats.dram_bytes_transacted += 1024 * 4 * 3
+-        hw_stats.dram_transactions += 1024 * 4 // 32 * 3
+-        hw_stats.coalescing_efficiency = creport.coalescing_efficiency
+-
+-        instrs = [
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=("%x_val",),
+-                operands={"src": MemRef.of("global", "%x"), "dst": SsaRef("%x_val")},
+-                source_ops=(SourceRef("tt.load", 11, 5, "%x_5"),),
+-            ),
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=("%y_val",),
+-                operands={"src": MemRef.of("global", "%y"), "dst": SsaRef("%y_val")},
+-                source_ops=(SourceRef("tt.load", 14, 5, "%y_7"),),
+-            ),
+-            Instr(
+-                name="VADD" if isa_name == "vortex_rvgpu" else "EPI",
+-                cost=51.2,
+-                loop=None,
+-                defs=("%out_val",),
+-                operands={"in0": SsaRef("%x_val"), "in1": SsaRef("%y_val")},
+-                source_ops=(SourceRef("arith.addf", 17, 5, "%2"),),
+-            ),
+-            Instr(
+-                name="STG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=(),
+-                operands={"dst": MemRef.of("global", "%out"), "value": SsaRef("%out_val")},
+-                source_ops=(SourceRef("tt.store", 18, 5, None),),
+-            ),
+-        ]
+-        total_cost = 435.2
+-        ref_cost = 512.0
+-        oracle_cost = 435.2
+-
+-    elif tier in ("t1_matmul", "t2_matmul_relu"):
+-        # Matrix multiply: tile reduction
+-        # Global loads into scratchpad, TCU MMA, and store
+-        creport = coalescer.analyze(base_address=0, stride_elements=1, element_bytes=4)
+-        breport = bank_unit.analyze(addresses=[i * 4 for i in range(16)])  # 16 threads stride 1 -> 0 conflicts
+-        hw_stats.dram_bytes_requested += (64 * 32 + 32 * 64 + 64 * 64) * 4
+-        hw_stats.dram_bytes_transacted += (64 * 32 + 32 * 64 + 64 * 64) * 4
+-        hw_stats.coalescing_efficiency = creport.coalescing_efficiency
+-        hw_stats.total_bank_conflicts = breport.total_conflicts
+-        hw_stats.bank_stall_cycles = breport.stall_cycles
+-
+-        mac_name = "TCU_MMA16" if isa_name == "vortex_rvgpu" else "MAC16"
+-        mma_cost = 32.0 if isa_name == "vortex_rvgpu" else 56.0
+-
+-        instrs = [
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA2D",
+-                cost=64.0,
+-                loop=None,
+-                defs=("%a_tile",),
+-                operands={"src": MemRef.of("global", "%a"), "dst": SsaRef("%a_tile")},
+-                constrained_on="sizes=[64, 32]",
+-                source_ops=(SourceRef("tt.load", 20, 5, "%a"),),
+-            ),
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA2D",
+-                cost=64.0,
+-                loop=None,
+-                defs=("%b_tile",),
+-                operands={"src": MemRef.of("global", "%b"), "dst": SsaRef("%b_tile")},
+-                constrained_on="sizes=[32, 64]",
+-                source_ops=(SourceRef("tt.load", 22, 5, "%b"),),
+-            ),
+-            Instr(
+-                name="BARRIER" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=1.0,
+-                loop=None,
+-                defs=(),
+-                operands={},
+-                source_ops=(),
+-            ),
+-            Instr(
+-                name=mac_name,
+-                cost=mma_cost,
+-                loop=None,
+-                defs=("%c_acc",),
+-                operands={"a": SsaRef("%a_tile"), "b": SsaRef("%b_tile"), "acc": Imm(0.0)},
+-                source_ops=(SourceRef("tt.dot", 25, 5, "%acc_37"),),
+-            ),
+-        ]
+-
+-        if tier == "t2_matmul_relu":
+-            instrs.append(
+-                Instr(
+-                    name="VRELU" if isa_name == "vortex_rvgpu" else "CLAMP",
+-                    cost=16.0,
+-                    loop=None,
+-                    defs=("%c_relu",),
+-                    operands={"in0": SsaRef("%c_acc")},
+-                    source_ops=(SourceRef("arith.select", 30, 5, "%c_out"),),
+-                )
+-            )
+-            out_val_ref = SsaRef("%c_relu")
+-        else:
+-            out_val_ref = SsaRef("%c_acc")
+-
+-        instrs.append(
+-            Instr(
+-                name="STG" if isa_name == "vortex_rvgpu" else "DMA2D",
+-                cost=64.0,
+-                loop=None,
+-                defs=(),
+-                operands={"dst": MemRef.of("global", "%c"), "value": out_val_ref},
+-                source_ops=(SourceRef("tt.store", 35, 5, None),),
+-            )
+-        )
+-        total_cost = sum(i.cost for i in instrs)
+-        ref_cost = total_cost * 1.2
+-        oracle_cost = total_cost
+-
+-    elif tier == "t3_modulo":
+-        creport = coalescer.analyze(base_address=0, stride_elements=1, element_bytes=4)
+-        hw_stats.dram_bytes_requested += 1024 * 4 * 3
+-        hw_stats.dram_bytes_transacted += 1024 * 4 * 3
+-        hw_stats.coalescing_efficiency = creport.coalescing_efficiency
+-
+-        instrs = [
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=("%x_val",),
+-                operands={"src": MemRef.of("global", "%x"), "dst": SsaRef("%x_val")},
+-                source_ops=(SourceRef("tt.load", 10, 5, "%x_val"),),
+-            ),
+-            Instr(
+-                name="LDG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=("%y_val",),
+-                operands={"src": MemRef.of("global", "%y"), "dst": SsaRef("%y_val")},
+-                source_ops=(SourceRef("tt.load", 11, 5, "%y_val"),),
+-            ),
+-            Instr(
+-                name="VMOD" if isa_name == "vortex_rvgpu" else "EPI",
+-                cost=64.0,
+-                loop=None,
+-                defs=("%out_val",),
+-                operands={"in0": SsaRef("%x_val"), "in1": SsaRef("%y_val")},
+-                source_ops=(SourceRef("arith.remsi", 16, 5, "%out_val"),),
+-            ),
+-            Instr(
+-                name="STG" if isa_name == "vortex_rvgpu" else "DMA1D",
+-                cost=128.0,
+-                loop=None,
+-                defs=(),
+-                operands={"dst": MemRef.of("global", "%out"), "value": SsaRef("%out_val")},
+-                source_ops=(SourceRef("tt.store", 38, 5, None),),
+-            ),
+-        ]
+-        total_cost = 448.0
+-        ref_cost = 512.0
+-        oracle_cost = 448.0
++def launch_env(tier: str) -> dict[str, Any]:
++    """The frozen launch environment of one fixture (`fixtures/launch_env.json`).
+ 
+-    # Execute on deterministic inputs & compute error
+-    inputs = make_inputs(tier)
+-    ref_outputs = compute_reference(tier, inputs)
++    Selection grounds the schema's symbolic terms against this. It is a declared
++    fact rather than a guess at the call site: without it every symbolic
++    predicate evaluates to `unknown`, the fail-closed rule rejects every
++    candidate, and the whole kernel turns into `UNSUPPORTED` markers that read as
++    an ISA limitation when they are really a missing argument.
++    """
++    if not LAUNCH_ENV_PATH.is_file():
++        return {}
++    data = json.loads(LAUNCH_ENV_PATH.read_text(encoding="utf-8"))
++    env = data.get(tier) or {}
++    return {key: value for key, value in env.items() if key != "comment"}
++
++
++# --------------------------------------------------------------------------- #
++# Buffer extents and launch grid
++# --------------------------------------------------------------------------- #
++
++
++def _block_width(module: Any) -> int:
++    """The kernel's tile width: the largest `tt.make_range` extent it declares."""
++    extents: list[int] = []
++    for op in walk_region(module.body):
++        if op.name != "tt.make_range":
++            continue
++        raw = op.attributes.get("end")
++        match = _BLOCK_RE.match(str(getattr(raw, "value", raw) or ""))
++        if match:
++            extents.append(int(match.group(1)))
++    return max(extents) if extents else 0
++
++
++def _derive_grid(module: Any, env: Mapping[str, Any]) -> tuple[int, int, int]:
++    """The launch grid: problem size divided by the kernel's tile width.
++
++    Derived rather than recorded, so a kernel whose block width changes cannot
++    silently keep a stale grid. A wrong grid surfaces as a partially written
++    output, which the parity comparison sees.
++    """
++    block = _block_width(module)
++    rows, columns = env.get("M"), env.get("N")
++    if not block or not isinstance(rows, int) or not isinstance(columns, int):
++        return (1, 1, 1)
++    return (max(1, rows // block), max(1, columns // block), 1)
++
++
++def _problem_extents(
++    inputs: Sequence[str], outputs: Sequence[str], env: Mapping[str, Any], flat: int
++) -> dict[str, tuple[int, ...]]:
++    """The buffer extent of each pointer argument: `(M,K)`, `(K,N)`, `(M,N)`.
++
++    The matmul convention (Triton passes the pointers in `a, b, c` order) when
++    M/N/K are all declared; otherwise the kernel's own flat address range, which
++    is the 1-D case.
++    """
++    rows, columns, inner = env.get("M"), env.get("N"), env.get("K")
++    extents: dict[str, tuple[int, ...]] = {}
++    if isinstance(rows, int) and isinstance(columns, int) and isinstance(inner, int):
++        if len(inputs) >= 1:
++            extents[inputs[0]] = (rows, inner)
++        if len(inputs) >= 2:
++            extents[inputs[1]] = (inner, columns)
++        for name in outputs:
++            extents[name] = (rows, columns)
++        return extents
++    if flat:
++        for name in (*inputs, *outputs):
++            extents.setdefault(name, (flat,))
++    return extents
++
++
++def _roots(module: Any, start: str, pointers: Sequence[str]) -> list[str]:
++    """Function-argument pointer names reachable from `start` by following operands.
++
++    Breadth-first with a visited set rather than recursion: the corpus's chains
++    are a few hops, but nothing in the IR bounds them and an unguarded walk over
++    a cycle hangs instead of answering.
++    """
++    by_name: dict[str, Any] = {}
++    for op in walk_region(module.body):
++        for result in op.results:
++            by_name[result.name] = op
++    seen: set[str] = set()
++    queue = [start]
++    found: list[str] = []
++    while queue:
++        name = queue.pop()
++        if name in seen:
++            continue
++        seen.add(name)
++        if name in pointers:
++            if name not in found:
++                found.append(name)
++            continue
++        op = by_name.get(name)
++        if op is None:
++            continue
++        queue.extend(operand.name for operand in op.operands)
++    return sorted(found)
++
++
++def _classify_pointers(module: Any) -> tuple[list[str], list[str]]:
++    """Function pointer arguments split into the ones read and the ones written.
++
++    `tt.load` reads through operand 0 and `tt.store` writes through operand 0, so
++    the *operation name* is what says read or write. A pointer argument that
++    nothing loads or stores is still addressed by the program, so it is treated
++    as an input rather than dropped.
++    """
++    function = module.functions()[0]
++    pointers = [value.name for value in function.args if value.type.kind == "ptr"]
++    loaded: list[str] = []
++    stored: list[str] = []
++    for op in walk_region(module.body):
++        if op.name not in ("tt.load", "tt.store") or not op.operands:
++            continue
++        target = loaded if op.name == "tt.load" else stored
++        for name in _roots(module, op.operands[0].name, pointers):
++            if name not in target:
++                target.append(name)
++    for pointer in pointers:
++        if pointer not in loaded and pointer not in stored:
++            loaded.append(pointer)
++    return loaded, stored
++
++
++# --------------------------------------------------------------------------- #
++# Lowering
++# --------------------------------------------------------------------------- #
++
++
++def assemble_program(module: Any, graph: Any, schema: Any, env: Mapping[str, Any], report: list):
++    """The production assembly path: real recogniser, real schema, default selector.
++
++    `selector` is deliberately not passed, so this exercises `assemble`'s own
++    `_default_selector` -> `isa.select.select`: the code that actually runs, not
++    a stand-in that is admissible by construction.
++    """
++    from .emit.assemble import assemble
++
++    return assemble(module, graph, annotate(module, graph), schema, report=report, env=dict(env))
++
++
++def lower_text(
++    text: str,
++    *,
++    isa_name: str = "vortex_rvgpu",
++    env: Mapping[str, Any] | None = None,
++    tier: str = "<string>",
++    source_path: str = "<string>",
++) -> RunContext:
++    """Lower Triton IR text to `isa_name`. Never raises on bad input.
++
++    A parse failure and a refusal both come back as a populated `unsupported`
++    list, because the caller's question -- "did this lower" -- has the same shape
++    either way. An exception from here would mean a defect in the pipeline, not
++    a limitation of the kernel or the target, and the two must not be conflated.
++    """
++    parsed = parse_module(text, source_path=source_path)
++    if not parsed.ok or parsed.module is None:
++        return RunContext(tier=tier, schema=isa_name, unsupported=[str(parsed.diagnostic)])
++
++    module = parsed.module
++    graph = build_def_use(module)
++    environment = dict(env if env is not None else launch_env(tier))
++
++    raw_ops = list(walk_region(module.body))
++    producers = [op for op in raw_ops if op.name not in _NON_PRODUCERS]
++
++    schema = load_builtin(isa_name)
++    report: list = []
++    program = assemble_program(module, graph, schema, environment, report)
++
++    markers = program.markers()
++    marked = {marker.op_name for marker in markers}
++    context = RunContext(
++        tier=tier,
++        module=module,
++        program=program,
++        annotations={op.name: "lowered" for op in producers if op.name not in marked},
++        unsupported=[
++            f"{marker.kind} at {marker.loc_name or '?'} ({marker.op_name}): {marker.reason}"
++            for marker in markers
++        ],
++        total_cost=program.total_cost,
++        value_ops=len(producers),
++        annotated_value_ops=len(producers) - len(markers),
++        largest_subgraph_ops=len(producers) - len(markers),
++        emitted_instructions=len(program.instructions()),
++        raw_op_count=len(raw_ops),
++        schema=isa_name,
++    )
++    if markers:
++        # Refused. No execution, no parity number: running a program with an
++        # unlowered operation in it produces numbers nobody should trust, and
++        # printing them beside a refusal is how a miscompile earns a pass.
++        return context
++
++    try:
++        _execute(context, module, program, environment)
++    except Exception as error:
++        # The lowering succeeded; execution did not. Recorded on the context so
++        # a caller sees it, rather than raised: `lower_text` promises not to
++        # raise, and an exception here would make a kernel that lowered cleanly
++        # indistinguishable from one that was refused.
++        context.execution_error = f"{type(error).__name__}: {error}"
++    return context
+ 
+-    emu_inputs = {}
+-    if tier == "t0_vecadd":
+-        emu_inputs = {"%x": inputs["x"], "%y": inputs["y"], "%out": np.zeros_like(inputs["x"])}
+-    elif tier in ("t1_matmul", "t2_matmul_relu"):
+-        emu_inputs = {"%a": inputs["a"], "%b": inputs["b"], "%c": np.zeros((64, 64), dtype=np.float32)}
+-    elif tier == "t3_modulo":
+-        emu_inputs = {"%x": inputs["x"], "%y": np.maximum(1.0, np.abs(inputs["y"])), "%out": np.zeros_like(inputs["x"])}
+ 
+-    program = Program(
++def lower_fixture(tier_or_path: str, isa_name: str = "vortex_rvgpu") -> RunContext:
++    """Lower one corpus fixture, by tier name or by path."""
++    candidate = Path(tier_or_path)
++    tier = candidate.stem if candidate.suffix == ".ttir" or "/" in tier_or_path else tier_or_path
++    fixture_path = FIXTURES_DIR / f"{tier}.ttir"
++    if not fixture_path.is_file():
++        fixture_path = candidate
++    if not fixture_path.is_file():
++        return RunContext(tier=tier, schema=isa_name, unsupported=[f"no such fixture: {tier_or_path}"])
++    return lower_text(
++        fixture_path.read_text(encoding="utf-8"),
+         isa_name=isa_name,
+-        schema_version=1,
+-        kernel_name=f"{tier}_kernel",
+-        total_cost=total_cost,
+-        inputs=tuple(emu_inputs.keys()),
+-        instrs=tuple(instrs),
++        env=launch_env(tier),
++        tier=tier,
++        source_path=str(fixture_path),
+     )
+ 
+-    policy = PrecisionPolicy(input_precision="tf32" if tier in ("t1_matmul", "t2_matmul_relu") else "ieee")
+-    emu_result = emulate(program, emu_inputs, policy=policy)
+ 
+-    # Get primary output buffer
+-    if tier == "t0_vecadd":
+-        emu_out = emu_result["%out"]
+-        ref_out = ref_outputs["out"]
+-    elif tier in ("t1_matmul", "t2_matmul_relu"):
+-        emu_out = emu_result["%c"]
+-        ref_out = ref_outputs["c"]
+-    else:
+-        emu_out = emu_result["%out"]
+-        ref_out = ref_outputs["out"]
+-
+-    peak = float(np.max(np.abs(ref_out))) if ref_out.size else 1.0
+-    rel_err = float(np.max(np.abs(emu_out - ref_out)) / max(1.0, peak))
+-
+-    hw_stats.instructions_executed = len(instrs)
+-    hw_stats.compute_cycles = int(total_cost)
+-    hw_stats.total_cycles = hw_stats.compute_cycles + hw_stats.bank_stall_cycles
++# --------------------------------------------------------------------------- #
++# Execution and parity
++# --------------------------------------------------------------------------- #
++
++
++def _declared_precision(module: Any) -> str:
++    """`tf32` when any `tt.dot` in the kernel declares it, else `ieee`.
++
++    Read from the kernel rather than assumed from the tier name: the tolerance
++    that follows is only defensible if it is derived from what the IR asks for.
++    """
++    for op in walk_region(module.body):
++        if op.name != "tt.dot":
++            continue
++        raw = op.attributes.get("inputPrecision")
++        if raw is not None and "tf32" in str(getattr(raw, "value", raw)).lower():
++            return "tf32"
++    return "ieee"
++
++
++def _tolerance(precision: str, env: Mapping[str, Any]) -> float:
++    """The derived error bound for a K-long reduction, never a hardcoded epsilon.
++
++    TF32 keeps 10 explicit mantissa bits, so each rounded operand carries at most
++    2**-11 relative error and each fp32 accumulate step at most 2**-24. Summing K
++    products bounds the total at K * (2 * 2**-11 + 2**-24). An IEEE path has no
++    operand truncation, leaving K * 2**-24. Both are derivations, so a change to
++    K or to the declared precision moves the bound instead of widening it by
++    hand.
++    """
++    reduction = env.get("K")
++    length = reduction if isinstance(reduction, int) and reduction > 0 else 1
++    if precision == "tf32":
++        return length * (2 * 2.0**-11 + 2.0**-24)
++    return length * 2.0**-24
++
++
++def _hardware_stats(
++    program: Program, extents: Mapping[str, tuple[int, ...]]
++) -> HardwarePerformanceStats:
++    """Coalescing and bank-conflict figures derived from the emitted stream.
++
++    Derived from the instructions the selector actually chose, not from a table
++    keyed on the tier: a different selection has to move these numbers, or they
++    are decoration.
++    """
++    stats = HardwarePerformanceStats()
++    coalescer = CoalescingUnit(cache_line_bytes=32, warp_size=32)
++    banks = BankConflictUnit(num_banks=16, bank_width_bytes=4)
+ 
+-    return RunContext(
+-        tier=tier,
+-        module=module,
+-        program=program,
+-        annotations={op.name: "lowered" for op in raw_ops},
+-        unsupported=[],
+-        total_cost=total_cost,
+-        reference_cost=ref_cost,
+-        oracle_cost=oracle_cost,
+-        value_ops=value_ops,
+-        annotated_value_ops=annotated_value_ops,
+-        largest_subgraph_ops=value_ops,
+-        emitted_instructions=len(instrs),
+-        raw_op_count=raw_op_count,
+-        emu_outputs={"out": emu_out},
+-        reference_outputs={"out": ref_out},
+-        tolerance=0.035 if tier in ("t1_matmul", "t2_matmul_relu") else 0.0,
+-        schema=isa_name,
+-        hardware_stats=hw_stats,
+-        parity_max_rel_err=rel_err,
++    memory_instrs = [
++        instr
++        for instr in program.instructions()
++        if any(role in instr.operands for role in ("src", "dst"))
++    ]
++    words = sum(int(np.prod(shape)) for shape in extents.values()) or 1
++
++    report = coalescer.analyze(base_address=0, stride_elements=1, element_bytes=4)
++    stats.coalescing_efficiency = report.coalescing_efficiency
++    stats.dram_bytes_requested = words * 4
++    stats.dram_bytes_transacted = words * 4
++    stats.dram_transactions = max(1, (words * 4) // 32) * max(1, len(memory_instrs))
++
++    conflicts = banks.analyze([index * 4 for index in range(min(32, words))])
++    stats.total_bank_conflicts = conflicts.total_conflicts
++    stats.bank_stall_cycles = conflicts.stall_cycles
++
++    stats.instructions_executed = len(program.instructions())
++    stats.compute_cycles = int(program.total_cost or 0.0)
++    stats.total_cycles = stats.compute_cycles + stats.bank_stall_cycles
++    return stats
++
++
++def _execute(context: RunContext, module: Any, program: Program, env: Mapping[str, Any]) -> None:
++    """Run the emitted program over the grid and record the parity error.
++
++    One `emulate` call executes one program, so a 128x128 problem at a 64-wide
++    tile is four programs; each accumulates into the same buffers, which is what
++    the hardware would do. A tier with no declared inputs is skipped rather than
++    guessed at.
++    """
++    tier = context.tier
++    if tier not in _FIXTURE_SHAPES:
++        return
++
++    inputs = make_inputs(tier)
++    reference = compute_reference(tier, inputs)
++    loaded, stored = _classify_pointers(module)
++    extents = _problem_extents(loaded, stored, env, _block_width(module))
++
++    storage: dict[str, Any] = {}
++    payloads = list(inputs.values())
++    for index, name in enumerate(loaded):
++        payload = payloads[index] if index < len(payloads) else None
++        shape = extents.get(name) or (payload.shape if payload is not None else (1,))
++        buffer = np.zeros(shape, dtype=np.float32)
++        if payload is not None:
++            window = tuple(slice(0, int(size)) for size in np.minimum(payload.shape, shape))
++            buffer[window] = payload[window]
++        storage[name] = buffer
++    # Output buffers start as NaN, not zero. Each program of the grid writes one
++    # tile and the emulator returns the whole buffer, so the merge below has to
++    # tell "this program wrote here" from "this program left it alone" -- and a
++    # zero cannot carry that distinction, because zero is a legitimate result.
++    # Tier 2's ReLU makes this concrete: it clamps roughly half its output to
++    # exactly 0.0, and a `where=value != 0` merge discards every one of those
++    # writes, leaving the untouched initial value behind. That scored a relative
++    # error of 1.057 against the reference on a kernel that had lowered and
++    # executed correctly.
++    for name in stored:
++        storage[name] = np.full(extents.get(name) or (1,), np.nan, dtype=np.float32)
++    # Scalar kernel arguments come from the launch environment. The IR names them
++    # with the SSA sigil (`%M`) while `launch_env.json` declares some keys bare
++    # (`M`, `N`, `K`) and some with it (`%sam`), so both spellings are tried. The
++    # emulator refuses to default a scalar the kernel reads, which is how a
++    # missing entry here surfaces as a named `MissingInput` rather than as a
++    # silently wrong number.
++    for value in module.functions()[0].args:
++        if value.type.kind == "ptr":
++            continue
++        for key in (value.name, value.name.lstrip("%")):
++            candidate = env.get(key)
++            if isinstance(candidate, int):
++                storage[value.name] = candidate
++                break
++
++    precision = _declared_precision(module)
++    policy = PrecisionPolicy(input_precision=precision)
++    grid_m, grid_n, _ = _derive_grid(module, env)
++
++    written: dict[str, np.ndarray] = {}
++    for pid_m in range(max(1, grid_m)):
++        for pid_n in range(max(1, grid_n)):
++            per_program = {
++                key: (value.copy() if isinstance(value, np.ndarray) else value)
++                for key, value in storage.items()
++            }
++            produced = emulate(program, per_program, policy=policy, grid=(pid_m, pid_n, 0))
++            for name, value in produced.items():
++                if name not in stored:
++                    continue
++                target = written.setdefault(name, np.full_like(storage[name], np.nan))
++                array = np.asarray(value, dtype=np.float32)
++                np.copyto(target, array, where=~np.isnan(array))
++
++    context.hardware_stats = _hardware_stats(program, extents)
++    if not written or not stored:
++        return
++
++    # Anything still NaN was never written by any program of the grid. That is a
++    # coverage failure, not a rounding one, so it is left as NaN and propagates
++    # into the error rather than being quietly zero-filled.
++    emitted = np.asarray(written[stored[0]], dtype=np.float64)
++    expected = np.asarray(next(iter(reference.values())), dtype=np.float64)
++    if emitted.shape != expected.shape and expected.size == emitted.size:
++        expected = expected.reshape(emitted.shape)
++
++    peak = float(np.max(np.abs(expected))) if expected.size else 1.0
++    context.emu_outputs = {"out": emitted}
++    context.reference_outputs = {"out": expected}
++    context.tolerance = _tolerance(precision, env)
++    context.parity_max_rel_err = (
++        float(np.max(np.abs(emitted - expected)) / max(1.0, peak)) if emitted.size else 0.0
+     )
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/test_mvp_integration.py out/test_mvp_integration.py
+--- a/test_mvp_integration.py	2026-09-17 18:46:35.000000000 +0000
++++ b/test_mvp_integration.py	2026-09-17 18:58:43.153553267 +0000
+@@ -2,7 +2,6 @@
+ """Test script to verify MVP demo requirements for PyTorch integration."""
+ 
+ import torch
+-import numpy as np
+ 
+ 
+ def test_device_registration():
+@@ -49,7 +48,7 @@
+         
+         checks = {
+             "device_count() >= 1": count >= 1,
+-            "is_available() == True": available == True,
++            "is_available() is True": available is True,
+             "current_device() works": current is not None,
+         }
+         
+@@ -70,35 +69,41 @@
+ 
+ 
+ def test_tensor_to_device():
+-    """Test that torch.tensor(...).to('toyisa') works."""
+-    print("=" * 70)
+-    print("TEST 3: Tensor Device Transfer")
+-    print("=" * 70)
+-    
+-    try:
+-        x = torch.tensor([1.0, 2.0, 3.0])
+-        print(f"Created tensor: {x}")
+-        
+-        x_toyisa = x.to('toyisa')
+-        print(f"Moved to toyisa: {x_toyisa}")
+-        print(f"Device: {x_toyisa.device}")
+-        
+-        # Verify it's on the right device
+-        if str(x_toyisa.device) == "toyisa":
+-            print("✓ PASS: Tensor successfully moved to toyisa device")
+-            print()
+-            return True
+-        else:
+-            print(f"✗ FAIL: Device is {x_toyisa.device}, expected toyisa")
+-            print()
+-            return False
+-    except Exception as e:
+-        print(f"✗ FAIL: Exception: {e}")
+-        import traceback
+-        traceback.print_exc()
+-        print()
+-        return False
++    """The data-plane boundary: `tensor.to('toyisa')` must refuse, and say why.
+ 
++    This asserted the opposite until now -- that the transfer succeeds -- which
++    contradicts the seam's own documented boundary. `device_interface.
++    DATA_PLANE_GAP` records the measured reason: allocating a torch.Tensor on a
++    PrivateUse1 device needs an allocator and dispatch keys registered from a
++    compiled C++ extension, which this project does not ship, and
++    `RENAME_BLOCKED` records that calling `rename_privateuse1_backend` to get
++    part of the way there makes torch.accelerator treat toyisa as the
++    accelerator and every Dynamo trace then fails.
++
++    So the passing condition is a clean refusal, not a transfer. The seam runs
++    programs Dynamo hands it and returns tensors; it never accepts a tensor
++    whose storage lives on the toy device.
++    """
++    print("=" * 70)
++    print("TEST 3: Tensor Device Transfer (documented boundary)")
++    print("=" * 70)
++
++    from triton_toyisa.torch_backend.device_interface import DATA_PLANE_GAP
++
++    x = torch.tensor([1.0, 2.0, 3.0])
++    print(f"Created tensor: {x}")
++    try:
++        moved = x.to("toyisa")
++    except (RuntimeError, TypeError, ValueError) as error:
++        print(f"Refused, as documented: {error}")
++        print(f"Reason of record: {DATA_PLANE_GAP[:80]}...")
++        print("PASS: the data plane refuses cleanly instead of pretending")
++        print()
++        return True
++    print(f"FAIL: the transfer unexpectedly succeeded -> {moved.device}")
++    print("      the data-plane gap may have closed; update DATA_PLANE_GAP if so")
++    print()
++    return False
+ 
+ def test_backend_compilation():
+     """Test that torch.compile with backend='toyisa' works."""
+@@ -111,14 +116,14 @@
+             return a + b
+         
+         compiled = torch.compile(simple_fn, backend='toyisa')
+-        print(f"✓ PASS: Function compiled successfully")
++        print("✓ PASS: Function compiled successfully")
+         print(f"   Compiled function: {compiled}")
+         
+         # Check if it has the plan attached
+         if hasattr(compiled, 'toyisa_plan'):
+             print(f"✓ PASS: Plan attached: {compiled.toyisa_plan}")
+         else:
+-            print(f"⚠ WARNING: No plan attached (may use eager fallback)")
++            print("⚠ WARNING: No plan attached (may use eager fallback)")
+         
+         print()
+         return True
+@@ -160,9 +165,10 @@
+     print("=" * 70)
+     
+     try:
++        import numpy as np
++
+         from triton_toyisa.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
+         from triton_toyisa.emu.exec import emulate
+-        import numpy as np
+         
+         # Create a simple program
+         prog = Program(
+@@ -233,7 +239,7 @@
+     try:
+         from triton_toyisa.emit.ir import UnsupportedMarker
+         # Verify the marker class exists and can be instantiated
+-        marker = UnsupportedMarker(op_name="test", reason="test reason")
++        UnsupportedMarker(op_name="test", reason="test reason")
+         results["CHK006 - Failure route exists"] = True
+     except Exception:
+         results["CHK006 - Failure route exists"] = False
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/tests/contract/test_end_to_end.py out/tests/contract/test_end_to_end.py
+--- a/tests/contract/test_end_to_end.py	2026-09-17 18:46:35.000000000 +0000
++++ b/tests/contract/test_end_to_end.py	2026-09-17 18:54:38.128495384 +0000
+@@ -1,74 +1,225 @@
+-"""Contract tests for end-to-end compiler lowering pipeline and numerical parity.
++"""Contract tests for the end-to-end lowering pipeline.
+ 
+-Validates that all four frozen fixtures (t0_vecadd, t1_matmul, t2_matmul_relu, t3_modulo)
+-lower cleanly to the Vortex RISC-V GPGPU ISA, execute in the bitwise-accurate emulator,
+-and produce outputs within derived numerical parity bounds.
++Each case drives `lower_fixture`, which runs the production chain
++(`parse_module -> build_def_use -> annotate -> assemble`) with the real schema
++and the real selector. Nothing here asserts an instruction *name* the pipeline
++was told to emit: the point is that the selector chose it from the schema's
++candidate set, so the assertions are about coverage, refusal and numerical
++parity.
++
++The Tier 3 case is the corpus's negative control and earns its own note. An
++earlier version of this file asserted `ctx.unsupported == []` for it -- encoding
++a miscompile as the expected behaviour, because the lowering it tested was a
++hardcoded table that emitted a `VMOD` instruction for a kernel whose modulo
++wraparound makes its memory access unstructured. It must be refused, with the
++originating name attached.
+ """
+ 
+ from __future__ import annotations
+ 
+ import unittest
++from pathlib import Path
+ 
+ import numpy as np
+ 
+-from triton_toyisa.isa.schema import load_builtin
++from triton_toyisa.isa.schema import load_builtin, validate_schema
+ from triton_toyisa.lower import lower_fixture
+ 
++#: Every ISA the corpus is lowered against. `lower_fixture` takes the name and
++#: changes nothing else, which is the cross-ISA transfer claim in one line.
++ISAS = ("toyisa1", "toyisa2", "vortex_rvgpu")
++
++#: Tiers expected to lower completely, and the one expected to be refused.
++LOWERABLE = ("t0_vecadd", "t1_matmul", "t2_matmul_relu")
++REFUSED = "t3_modulo"
++
++#: Execution is verified on the two ISAs whose memory instructions are
++#: direction-agnostic. `vortex_rvgpu` declares directional LDG/STG with identical
++#: rule, constraint and cost; the selector has no notion of direction, so it
++#: resolves the tie by declaration order and picks LDG for stores as well as
++#: loads. Its *lowering* is asserted below; its execution is a known gap,
++#: recorded in KNOWN_GAPS.md rather than hidden behind a skip with no reason.
++EXECUTABLE_ISAS = ("toyisa1", "toyisa2")
++
++
++class TestSchemas(unittest.TestCase):
++    def test_every_schema_loads_and_validates(self) -> None:
++        for name in ISAS:
++            with self.subTest(isa=name):
++                schema = load_builtin(name)
++                self.assertEqual(schema.name, name)
++                self.assertEqual(validate_schema(schema), [])
+ 
+-class TestEndToEndContract(unittest.TestCase):
+-    """End-to-end lowering and execution contract tests."""
+-
+-    def test_vortex_rvgpu_schema_loads(self) -> None:
+-        """The extended Vortex RISC-V GPGPU ISA schema loads and validates."""
++    def test_vortex_declares_its_instruction_set(self) -> None:
+         schema = load_builtin("vortex_rvgpu")
+-        self.assertEqual(schema.name, "vortex_rvgpu")
+-        self.assertEqual(schema.schema_version, 1)
+-        expected_instrs = {
++        expected = {
+             "LDG", "STG", "LDS", "STS",
+             "TCU_MMA16", "TCU_MMA32",
+             "VADD", "VMUL", "VSUB", "VMOD", "VRELU", "VCLAMP",
+             "BARRIER",
+         }
+-        self.assertTrue(expected_instrs.issubset(set(schema.instructions.keys())))
++        self.assertTrue(expected.issubset(set(schema.instructions)))
+ 
+-    def test_t0_vecadd_end_to_end(self) -> None:
+-        """t0_vecadd lowers, executes, and yields exact 0.0 relative error."""
+-        ctx = lower_fixture("t0_vecadd", isa_name="vortex_rvgpu")
+-        self.assertEqual(ctx.unsupported, [])
+-        self.assertGreater(ctx.emitted_instructions, 0)
+-        self.assertEqual(ctx.parity_max_rel_err, 0.0)
+-        self.assertIsNotNone(ctx.hardware_stats)
+-        self.assertEqual(ctx.hardware_stats.coalescing_efficiency, 1.0)
+-        self.assertEqual(ctx.hardware_stats.total_bank_conflicts, 0)
++    def test_barrier_is_not_a_memory_candidate(self) -> None:
++        """A fence must not compete with loads and stores for a memory operand.
+ 
+-    def test_t1_matmul_end_to_end(self) -> None:
+-        """t1_matmul lowers, executes with TCU_MMA16, and meets TF32 derived tolerance."""
+-        ctx = lower_fixture("t1_matmul", isa_name="vortex_rvgpu")
+-        self.assertEqual(ctx.unsupported, [])
+-        self.assertGreater(ctx.emitted_instructions, 0)
+-        self.assertIsNotNone(ctx.parity_max_rel_err)
+-        self.assertLessEqual(ctx.parity_max_rel_err, ctx.tolerance)
++        BARRIER was declared `kind: memory` with a trivially-true constraint and
++        a flat 0.01 cost, so it won every memory selection on minimum cost and
++        each load and store lowered to a fence.
++        """
++        schema = load_builtin("vortex_rvgpu")
++        barrier = schema.instructions["BARRIER"]
++        self.assertEqual(barrier.kind, "control")
++        self.assertNotEqual(barrier.rule, "memory")
++
++    def test_scratchpad_moves_are_not_global_lowerings(self) -> None:
++        """LDS/STS read and write scratch; they cannot lower a global access.
++
++        Declared `rule: memory` they undercut LDG/STG on cost and were selected
++        for global loads, producing a program that read a scratchpad nothing had
++        filled.
++        """
++        schema = load_builtin("vortex_rvgpu")
++        for name in ("LDS", "STS"):
++            with self.subTest(instruction=name):
++                self.assertNotEqual(schema.instructions[name].rule, "memory")
++
++
++class TestDirectionalSelection(unittest.TestCase):
++    """An ISA that splits loads from stores must have the right one chosen.
++
++    `vortex_rvgpu` declares LDG and STG identically in every field selection
++    reads, so before `direction` existed the minimum-cost rule broke the tie by
++    declaration order and picked LDG for stores as well as loads -- and the
++    emulator executed a store as a load.
++    """
++
++    def test_load_and_store_get_different_instructions(self) -> None:
++        from triton_toyisa.isa.schema import load_builtin
++        from triton_toyisa.lower import assemble_program, launch_env
++        from triton_toyisa.ttir.graph import build_def_use
++        from triton_toyisa.ttir.to_ir import parse_module
++
++        text = (Path(__file__).resolve().parents[2] / "fixtures" / "t0_vecadd.ttir").read_text()
++        module = parse_module(text).module
++        graph = build_def_use(module)
++        program = assemble_program(
++            module, graph, load_builtin("vortex_rvgpu"), launch_env("t0_vecadd"), []
++        )
++        by_source = {}
++        for instr in program.instructions():
++            for source in instr.source_ops:
++                if source.op_name in ("tt.load", "tt.store"):
++                    by_source.setdefault(source.op_name, set()).add(instr.name)
++        self.assertEqual(by_source.get("tt.load"), {"LDG"})
++        self.assertEqual(by_source.get("tt.store"), {"STG"})
++
++    def test_direction_agnostic_isa_is_unaffected(self) -> None:
++        """toyisa1 declares no direction, so one instruction still serves both."""
++        from triton_toyisa.isa.schema import load_builtin
++
++        for name, instruction in load_builtin("toyisa1").instructions.items():
++            with self.subTest(instruction=name):
++                self.assertIsNone(instruction.direction)
++                self.assertTrue(instruction.serves("load"))
++                self.assertTrue(instruction.serves("store"))
++
++    def test_direction_mismatch_is_recorded_as_a_rejection(self) -> None:
++        """Not pre-filtered: the audit trail must say why STG lost a load."""
++        from triton_toyisa.isa.schema import load_builtin
++        from triton_toyisa.isa.select import enumerate_candidates
++
++        candidates = enumerate_candidates(
++            load_builtin("vortex_rvgpu"), "memory", None, None, {}, "load"
++        )
++        rejected = {
++            c.instruction.name: c.rejected_by for c in candidates if not c.admissible
++        }
++        self.assertIn("STG", rejected)
++        self.assertIn("direction", rejected["STG"])
++
++
++class TestLowering(unittest.TestCase):
++    def test_lowerable_tiers_lower_on_every_isa(self) -> None:
++        for isa in ISAS:
++            for tier in LOWERABLE:
++                with self.subTest(isa=isa, tier=tier):
++                    ctx = lower_fixture(tier, isa_name=isa)
++                    self.assertEqual(ctx.unsupported, [], f"{tier} on {isa} was refused")
++                    self.assertTrue(ctx.fully_lowered)
++                    self.assertGreater(ctx.emitted_instructions, 0)
++                    self.assertGreater(ctx.total_cost, 0.0)
++
++    def test_selection_differs_across_isas(self) -> None:
++        """Transfer is a re-selection, not a rename.
++
++        If two ISAs produced the same instruction names at the same cost, the
++        schema would not be driving anything -- which is exactly the failure the
++        previous `"LDG" if isa_name == "vortex_rvgpu" else "DMA1D"` ternary hid.
++        """
++        chosen = {}
++        for isa in ISAS:
++            ctx = lower_fixture("t1_matmul", isa_name=isa)
++            chosen[isa] = (
++                frozenset(instr.name for instr in ctx.program.instructions()),
++                round(ctx.total_cost, 3),
++            )
++        self.assertEqual(len(set(chosen.values())), len(ISAS), chosen)
++
++    def test_tier3_is_refused_on_every_isa(self) -> None:
++        """The negative control. Refused, with the originating name attached."""
++        for isa in ISAS:
++            with self.subTest(isa=isa):
++                ctx = lower_fixture(REFUSED, isa_name=isa)
++                self.assertFalse(ctx.fully_lowered)
++                self.assertTrue(ctx.unsupported, "the modulo kernel was not refused")
++                joined = " ".join(ctx.unsupported)
++                self.assertIn("UNSUPPORTED", joined)
++                self.assertIn("modulo wraparound", joined)
++                self.assertIsNone(ctx.emu_outputs, "a refused program was executed anyway")
++
++    def test_unknown_fixture_is_a_diagnostic_not_a_crash(self) -> None:
++        ctx = lower_fixture("does_not_exist", isa_name="toyisa1")
++        self.assertTrue(ctx.unsupported)
++        self.assertFalse(ctx.fully_lowered)
++
++
++class TestNumericalParity(unittest.TestCase):
++    def test_vecadd_is_exact(self) -> None:
++        for isa in EXECUTABLE_ISAS:
++            with self.subTest(isa=isa):
++                ctx = lower_fixture("t0_vecadd", isa_name=isa)
++                self.assertEqual(ctx.parity_max_rel_err, 0.0)
++
++    def test_matmul_is_within_the_derived_tolerance(self) -> None:
++        for isa in EXECUTABLE_ISAS:
++            with self.subTest(isa=isa):
++                ctx = lower_fixture("t1_matmul", isa_name=isa)
++                self.assertIsNotNone(ctx.parity_max_rel_err)
++                self.assertLessEqual(ctx.parity_max_rel_err, ctx.tolerance)
++
++    def test_tolerance_is_derived_from_the_reduction_length(self) -> None:
++        """Not a hardcoded epsilon: K * (2*2^-11 + 2^-24) for the tf32 path."""
++        ctx = lower_fixture("t1_matmul", isa_name="toyisa1")
++        expected = 64 * (2 * 2.0**-11 + 2.0**-24)
++        self.assertAlmostEqual(ctx.tolerance, expected, places=9)
++
++    def test_hardware_stats_come_from_the_emitted_stream(self) -> None:
++        ctx = lower_fixture("t0_vecadd", isa_name="toyisa1")
+         self.assertIsNotNone(ctx.hardware_stats)
++        self.assertEqual(
++            ctx.hardware_stats.instructions_executed, ctx.emitted_instructions
++        )
+         self.assertGreater(ctx.hardware_stats.dram_bytes_transacted, 0)
+ 
+-    def test_t2_matmul_relu_end_to_end(self) -> None:
+-        """t2_matmul_relu lowers with TCU_MMA16 + VRELU and meets tolerance."""
+-        ctx = lower_fixture("t2_matmul_relu", isa_name="vortex_rvgpu")
+-        self.assertEqual(ctx.unsupported, [])
+-        self.assertGreater(ctx.emitted_instructions, 0)
+-        self.assertIsNotNone(ctx.parity_max_rel_err)
+-        self.assertLessEqual(ctx.parity_max_rel_err, ctx.tolerance)
+-        # Verify non-negativity from ReLU
+-        out = ctx.emu_outputs["out"]
+-        self.assertTrue(np.all(out >= 0.0))
+-
+-    def test_t3_modulo_end_to_end(self) -> None:
+-        """t3_modulo lowers with VMOD and yields exact parity."""
+-        ctx = lower_fixture("t3_modulo", isa_name="vortex_rvgpu")
++
++class TestReluEpilogue(unittest.TestCase):
++    def test_relu_output_is_non_negative(self) -> None:
++        """Tier 2's epilogue must clamp at zero wherever it is exercised."""
++        ctx = lower_fixture("t2_matmul_relu", isa_name="toyisa1")
+         self.assertEqual(ctx.unsupported, [])
+-        self.assertGreater(ctx.emitted_instructions, 0)
+-        self.assertEqual(ctx.parity_max_rel_err, 0.0)
+-        self.assertIsNotNone(ctx.hardware_stats)
++        self.assertIsNotNone(ctx.emu_outputs)
++        self.assertTrue(np.all(ctx.emu_outputs["out"] >= 0.0))
+ 
+ 
+ if __name__ == "__main__":
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/tests/unit/test_emu_cpp.py out/tests/unit/test_emu_cpp.py
+--- a/tests/unit/test_emu_cpp.py	2026-09-17 18:46:35.000000000 +0000
++++ b/tests/unit/test_emu_cpp.py	2026-09-17 18:57:08.847639651 +0000
+@@ -1,7 +1,21 @@
+-"""Tests for the C++ emulator backend."""
++"""Parity tests for the optional C++ emulator backend.
++
++Skipped whole-module unless the extension is built. It is not built by
++`pip install .` today -- `pyproject.toml` uses the plain setuptools backend, so
++`CMakeLists.txt` and `emu/cpp/` are never compiled (KNOWN_GAPS.md G5) -- so in a
++default checkout every case here skips. That is the honest state, and it is what
++this file should report.
++
++Written against stdlib `unittest`, like the rest of the suite: `run_tests.py` is
++the runner and pytest is not a dependency of this project. The previous version
++used `pytest.skip(allow_module_level=True)`, `pytest.approx` and `pytest.raises`,
++so importing it raised ImportError during collection and the module was reported
++as a hard ERROR rather than as a skip.
++"""
++
++import unittest
+ 
+ import numpy as np
+-import pytest
+ 
+ from triton_toyisa.emit.ir import (
+     Imm,
+@@ -17,18 +31,47 @@
+ from triton_toyisa.emu.exec import emulate
+ from triton_toyisa.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
+ 
+-if not HAS_CPP:
+-    pytest.skip("C++ backend is not installed", allow_module_level=True)
++if HAS_CPP:  # pragma: no cover - only where the extension is built
++    from triton_toyisa.emu._emu_cpp import (
++        PrecisionPolicy as CppPrecisionPolicy,
++    )
++    from triton_toyisa.emu._emu_cpp import (
++        ProgramNotExecutable,
++        UnsupportedInstruction,
++    )
++    from triton_toyisa.emu._emu_cpp import (
++        derive_tolerance as cpp_derive_tolerance,
++    )
++    from triton_toyisa.emu._emu_cpp import (
++        tf32_truncate as cpp_tf32_truncate,
++    )
+ 
+-from triton_toyisa.emu._emu_cpp import (
+-    PrecisionPolicy as CppPrecisionPolicy,
+-    derive_tolerance as cpp_derive_tolerance,
+-    tf32_truncate as cpp_tf32_truncate,
+-    ProgramNotExecutable,
+-    UnsupportedInstruction,
+-)
++
++class _assert_raises:
++    """`pytest.raises(..., match=...)` without pytest: substring, not regex.
++
++    The original used a regex `match=`, and two of its patterns contained an
++    unescaped `.` (`"tt.invalid_op_does_not_exist"`). A substring test is what
++    was actually meant and cannot silently match the wrong message.
++    """
++
++    def __init__(self, expected, needle):
++        self.expected, self.needle = expected, needle
++
++    def __enter__(self):
++        return self
++
++    def __exit__(self, exc_type, exc, tb):
++        if exc_type is None:
++            raise AssertionError(f"{self.expected.__name__} was not raised")
++        if not issubclass(exc_type, self.expected):
++            return False
++        if self.needle not in str(exc):
++            raise AssertionError(f"{self.needle!r} not in {str(exc)!r}")
++        return True
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_tf32_truncate():
+     """Test that the C++ tf32_truncate produces exactly the same bits as the Python one."""
+     # Some finite values, subnormals, and exactly halfway values to test rounding.
+@@ -38,18 +81,20 @@
+     np.testing.assert_array_equal(py_trunc, cpp_trunc, strict=True)
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_derive_tolerance():
+     """Test that the C++ derived tolerance matches the Python one."""
+     py_tol = derive_tolerance("tf32", 64, "f32")
+     cpp_tol = cpp_derive_tolerance("tf32", 64, "f32")
+-    assert pytest.approx(py_tol.value) == cpp_tol.value
++    assert abs(py_tol.value - cpp_tol.value) < 1e-12
+     assert py_tol.absolute == cpp_tol.absolute
+ 
+     py_tol = derive_tolerance("ieee", 128, "f32")
+     cpp_tol = cpp_derive_tolerance("ieee", 128, "f32")
+-    assert pytest.approx(py_tol.value) == cpp_tol.value
++    assert abs(py_tol.value - cpp_tol.value) < 1e-12
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_precision_policy_mac():
+     """Test C++ PrecisionPolicy.multiply_accumulate matches Python exactly."""
+     a = np.random.rand(16, 32).astype(np.float32)
+@@ -65,6 +110,7 @@
+     np.testing.assert_array_equal(py_acc, cpp_acc, strict=True)
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_elementwise_addi():
+     """Test a basic elementwise operation in the C++ emulator."""
+     # Minimal program: arith.addi on two scalar inputs, then store
+@@ -103,6 +149,7 @@
+     np.testing.assert_array_equal(outputs["Out"], outputs_py["Out"])
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_loop():
+     """Test loop execution in the C++ emulator."""
+     prog = Program(
+@@ -153,6 +200,7 @@
+     np.testing.assert_array_equal(outputs["Out"], np.array([15], dtype=np.float32))
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_program_id():
+     """Test get_program_id with grid parameters in the C++ emulator."""
+     prog = Program(
+@@ -202,6 +250,7 @@
+     np.testing.assert_array_equal(outputs["OutY"], outputs_py["OutY"])
+ 
+ 
++@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
+ def test_exceptions():
+     """Test that unsupported ops raise UnsupportedInstruction, and markers raise ProgramNotExecutable."""
+     prog_invalid_op = Program(
+@@ -220,7 +269,7 @@
+     inputs = {"Out": np.array([0], dtype=np.float32)}
+ 
+     # Invalid op raises UnsupportedInstruction (not implemented by machine)
+-    with pytest.raises(UnsupportedInstruction, match="tt.invalid_op_does_not_exist"):
++    with _assert_raises(UnsupportedInstruction, "tt.invalid_op_does_not_exist"):
+         emulate(prog_invalid_op, inputs, use_cpp=True)
+ 
+     prog_with_marker = Program(
+@@ -237,6 +286,6 @@
+     )
+ 
+     # UNSUPPORTED marker raises ProgramNotExecutable
+-    with pytest.raises(ProgramNotExecutable, match="tt.something_hard"):
++    with _assert_raises(ProgramNotExecutable, "tt.something_hard"):
+         emulate(prog_with_marker, inputs, use_cpp=True)
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/tools/demo_live.py out/tools/demo_live.py
+--- a/tools/demo_live.py	2026-09-17 18:46:35.000000000 +0000
++++ b/tools/demo_live.py	2026-09-17 18:54:38.129627317 +0000
+@@ -20,15 +20,15 @@
+ ROOT = Path(__file__).resolve().parent.parent
+ sys.path.insert(0, str(ROOT / "src"))
+ 
+-from triton_toyisa.ttir.to_ir import parse_module
+-from triton_toyisa.ttir.graph import build_def_use, walk_region
+-from triton_toyisa.recognize.descriptor import describe_operation
+-from triton_toyisa.idioms.detect import annotate
+-from triton_toyisa.isa.schema import load_builtin
+ from triton_toyisa.emit.assemble import assemble
+-from triton_toyisa.emu.hardware import CoalescingUnit, BankConflictUnit
+ from triton_toyisa.emu.exec import emulate
++from triton_toyisa.emu.hardware import BankConflictUnit, CoalescingUnit
+ from triton_toyisa.emu.precision import PrecisionPolicy
++from triton_toyisa.idioms.detect import annotate
++from triton_toyisa.isa.schema import load_builtin
++from triton_toyisa.recognize.descriptor import describe_operation
++from triton_toyisa.ttir.graph import build_def_use, walk_region
++from triton_toyisa.ttir.to_ir import parse_module
+ 
+ # Terminal styling
+ CYAN = "\033[96m"
+@@ -200,7 +200,7 @@
+         markers = program.markers()
+         if markers:
+             print(f"  ✔ Honest Refusal: Kernel requires unmodeled modulo wrap (markers={len(markers)})")
+-            print(f"  ✔ Routing to eager fallback per contract FR-025.")
++            print("  ✔ Routing to eager fallback per contract FR-025.")
+             toy_output = None
+         else:
+             inputs = {"%x_ptr": x, "%y_ptr": y, "%out_ptr": out, "%n": 1024}
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/verify/verify_defuse_graph.py out/verify/verify_defuse_graph.py
+--- a/verify/verify_defuse_graph.py	2026-09-17 18:46:35.000000000 +0000
++++ b/verify/verify_defuse_graph.py	2026-09-17 18:54:38.130698105 +0000
+@@ -19,8 +19,8 @@
+ ROOT = Path(__file__).resolve().parent.parent
+ sys.path.insert(0, str(ROOT / "src"))
+ 
+-from triton_toyisa.ttir.to_ir import parse_module
+ from triton_toyisa.ttir.graph import build_def_use, walk_region
++from triton_toyisa.ttir.to_ir import parse_module
+ 
+ FAILURES: list[str] = []
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/verify/verify_emulator.py out/verify/verify_emulator.py
+--- a/verify/verify_emulator.py	2026-09-17 18:46:35.000000000 +0000
++++ b/verify/verify_emulator.py	2026-09-17 18:54:38.131752437 +0000
+@@ -16,7 +16,6 @@
+ """
+ from __future__ import annotations
+ 
+-import math
+ import sys
+ from pathlib import Path
+ 
+@@ -25,9 +24,8 @@
+ ROOT = Path(__file__).resolve().parent.parent
+ sys.path.insert(0, str(ROOT / "src"))
+ 
++from triton_toyisa.emit.ir import Instr, Program, SsaRef  # noqa: E402
+ from triton_toyisa.emu.exec import emulate  # noqa: E402
+-from triton_toyisa.emu.precision import PrecisionPolicy  # noqa: E402
+-from triton_toyisa.emit.ir import Imm, Instr, Program, SsaRef  # noqa: E402
+ 
+ FAILURES: list[str] = []
+ 
+@@ -88,7 +86,7 @@
+         emulate(prog, {})  # %x is declared but not supplied
+         FAILURES.append("E5")
+         print("  FAIL E5: missing input accepted silently")
+-    except Exception as exc:  # noqa: BLE001 — the raise IS the expected behavior
++    except Exception as exc:
+         check("E5: raises on missing input", isinstance(exc, Exception), True,
+               f"{type(exc).__name__}: {exc}")
+ 
+@@ -108,7 +106,7 @@
+         emulate(prog2, {"%x": np.ones(4, dtype=np.float32)})
+         FAILURES.append("E6")
+         print("  FAIL E6: program with UNSUPPORTED marker executed anyway")
+-    except Exception as exc:  # noqa: BLE001 — ProgramNotExecutable IS the expected behavior
++    except Exception as exc:
+         check("E6: UNSUPPORTED halts via ProgramNotExecutable",
+               type(exc).__name__, "ProgramNotExecutable",
+               f"got {type(exc).__name__}: {exc}")
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/verify/verify_end_to_end.py out/verify/verify_end_to_end.py
+--- a/verify/verify_end_to_end.py	2026-09-17 18:46:35.000000000 +0000
++++ b/verify/verify_end_to_end.py	2026-09-17 18:54:38.132840386 +0000
+@@ -48,7 +48,6 @@
+     from triton_toyisa.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
+ 
+     schema = load_builtin("toyisa1")
+-    from pathlib import Path as _P
+     launch = json.loads((ROOT / "fixtures" / "launch_env.json").read_text())
+     program = None
+     expected_counts = {"t0_vecadd": 18, "t1_matmul": 40, "t2_matmul_relu": 40, "t3_modulo": 25}
+@@ -66,7 +65,7 @@
+             # contracted signature: (module, graph, annotations, schema, env=...)
+             program = assemble(module, graph, annotations, schema,
+                                env=dict(launch[tier]))
+-            n_items = len(program.instrs) + sum(len(l.body) for l in program.loops)
++            n_items = len(program.instrs) + sum(len(loop.body) for loop in program.loops)
+             check(f"A/{tier}: assembled items ({n_items})", n_items > 0, True)
+             check(f"A/{tier}: instruction count == {expected_counts[tier]}",
+                   len(program.instrs), expected_counts[tier],
+@@ -80,7 +79,7 @@
+             else:
+                 check(f"A/{tier}: no UNSUPPORTED markers", len(markers), 0,
+                       f"markers: {[str(m) for m in markers[:2]]}")
+-        except Exception as exc:  # noqa: BLE001 — a crash here is a finding, reported as one
++        except Exception as exc:
+             FAILURES.append(f"A/{tier}: assemble")
+             print(f"  FAIL A/{tier}: assemble RAISED {type(exc).__name__}: {exc}")
+             continue
+@@ -109,7 +108,7 @@
+             err = float(np.max(np.abs(got - (x + y))))
+             check("A/t0: emulator output == x+y (ieee)", err, 0.0,
+                   f"max abs err={err}, buffers={list(out)}")
+-        except Exception as exc:  # noqa: BLE001
++        except Exception as exc:
+             # t0 assembled program carries an UNSUPPORTED marker -> halt is correct
+             from triton_toyisa.emu.exec import ProgramNotExecutable
+             check("A/t0: emulate either matches x+y or halts on a named refusal",
+@@ -119,8 +118,8 @@
+     # ------------------------------------------------------------------ #
+     print("PATH B: demo pipeline (lower.py, hardcoded per-tier tables) — reported, cross-checked")
+     try:
+-        from triton_toyisa.lower import compute_reference, lower_fixture, make_inputs
+         from triton_toyisa.emu.hardware import CoalescingUnit
++        from triton_toyisa.lower import lower_fixture, make_inputs
+ 
+         # cross-check lower.py's coalescing stats against the unit it claims to use
+         cu = CoalescingUnit(cache_line_bytes=32, warp_size=32)
+@@ -158,7 +157,7 @@
+                 bound = n * (2.0 * 2.0**-11 + 2.0**-24)
+                 check(f"B/{tier}: t1 inside derived tf32 band (rel={rel:.3e} <= {bound:.3e})",
+                       rel <= bound, True)
+-    except Exception as exc:  # noqa: BLE001
++    except Exception as exc:
+         FAILURES.append("B: pipeline")
+         print(f"  FAIL B: pipeline RAISED {type(exc).__name__}: {exc}")
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/verify/verify_fixture_canon.py out/verify/verify_fixture_canon.py
+--- a/verify/verify_fixture_canon.py	2026-09-17 18:46:35.000000000 +0000
++++ b/verify/verify_fixture_canon.py	2026-09-17 18:54:38.134031505 +0000
+@@ -31,7 +31,7 @@
+ sys.path.insert(0, str(ROOT / "src"))
+ sys.path.insert(0, str(ROOT / "tools"))
+ 
+-from fixtures_lib import FIXTURES, load_golden, normalize, read_fixture, scan  # noqa: E402
++from fixtures_lib import load_golden, normalize, read_fixture, scan  # noqa: E402
+ 
+ FAILURES: list[str] = []
+ ABS_PATH = re.compile(r'loc\("(/[^"]*)"')
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-toyisa-master/verify/verify_ttir_parser.py out/verify/verify_ttir_parser.py
+--- a/verify/verify_ttir_parser.py	2026-09-17 18:46:35.000000000 +0000
++++ b/verify/verify_ttir_parser.py	2026-09-17 18:54:38.135108174 +0000
+@@ -110,7 +110,7 @@
+             raw = parse_raw(text, source_path="<negative>")
+             check(f"{label}: produced diagnostic or clean parse (no crash)",
+                   isinstance(raw.diagnostics, list), True)
+-        except Exception as exc:  # noqa: BLE001 — a raise here IS the failure
++        except Exception as exc:
+             FAILURES.append(label)
+             print(f"  FAIL {label}: parse_raw RAISED {type(exc).__name__}: {exc}")
+ 
+@@ -122,7 +122,7 @@
+     except RecursionError:
+         FAILURES.append("deep nesting")
+         print("  FAIL deep nesting: RecursionError propagated")
+-    except Exception as exc:  # noqa: BLE001
++    except Exception as exc:
+         check("deep nesting: refused with diagnostic, no crash", type(exc).__name__,
+               type(exc).__name__)  # any non-RecursionError exception is acceptable? NO:
+         FAILURES.append("deep nesting raised")
+@@ -139,7 +139,7 @@
+     for i, text in enumerate(adversarial):
+         try:
+             parse_raw(text, source_path=f"<adv{i}>")
+-        except Exception as exc:  # noqa: BLE001
++        except Exception as exc:
+             raised.append(f"case {i} ({text[:30]!r}): {type(exc).__name__}: {exc}")
+     check("adversarial corpus: parse_raw never raises", len(raised), 0,
+           "; ".join(raised[:3]))
