@@ -3,7 +3,16 @@
 import numpy as np
 import pytest
 
-from triton_toyisa.emit.ir import Imm, Instr, Loop, MemRef, Program, SourceRef, SsaRef
+from triton_toyisa.emit.ir import (
+    Imm,
+    Instr,
+    Loop,
+    MemRef,
+    Program,
+    SourceRef,
+    SsaRef,
+    UnsupportedMarker,
+)
 from triton_toyisa.emu import HAS_CPP
 from triton_toyisa.emu.exec import emulate
 from triton_toyisa.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
@@ -13,12 +22,10 @@ if not HAS_CPP:
 
 from triton_toyisa.emu._emu_cpp import (
     PrecisionPolicy as CppPrecisionPolicy,
-)
-from triton_toyisa.emu._emu_cpp import (
     derive_tolerance as cpp_derive_tolerance,
-)
-from triton_toyisa.emu._emu_cpp import (
     tf32_truncate as cpp_tf32_truncate,
+    ProgramNotExecutable,
+    UnsupportedInstruction,
 )
 
 
@@ -197,9 +204,6 @@ def test_program_id():
 
 def test_exceptions():
     """Test that unsupported ops raise UnsupportedInstruction, and markers raise ProgramNotExecutable."""
-    from triton_toyisa.emu._emu_cpp import ProgramNotExecutable, UnsupportedInstruction
-    from triton_toyisa.emit.ir import UnsupportedMarker
-    
     prog_invalid_op = Program(
         isa_name="toyisa",
         schema_version=1,
