@@ -51,12 +51,11 @@ def pause(auto: bool, duration: float = 0.5, msg: str = "Press ENTER to continue
 
 def print_banner():
     banner = """
-  ███████╗███████╗ ██████╗ ███████╗ █████╗ ██╗   ██╗██╗  ████████╗
-  ██╔════╝██╔════╝██╔════╝ ██╔════╝██╔══██╗██║   ██║██║  ╚══██╔══╝
-  ███████╗█████╗  ██║  ███╗█████╗  ███████║██║   ██║██║     ██║   
-  ╚════██║██╔══╝  ██║   ██║██╔══╝  ██╔══██║██║   ██║██║     ██║   
-  ███████║███████╗╚██████╔╝██║     ██║  ██║╚██████╔╝███████╗██║   
-  ╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝   
+    ##### ####  ##### #####  ###  #   # ##### #      ###  #   #
+        #   #   #   #     #   #   # #   # #     #     #   # #   #
+        #   ####    #     #   #   # ##### ###   #     #   # # # #
+        #   # #     #     #   #   # #   # #     #     #   # # # #
+        #   #  ## #####   #    ###  #   # #     #####  ###   # #
       COMPILER LOWERING, IR TRANSFORMATION & ISA DIFF SHOWCASE
     """
     console.print(Panel(Text(banner, style="bold cyan"), subtitle="[dim]PyTorch → TTIR → Pre-ISA Canonical IR → Target ISAs[/dim]", border_style="cyan"))
