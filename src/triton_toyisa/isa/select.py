@@ -38,6 +38,19 @@ class SelectionReport:
     no_admissible_lowering: bool = False
 
 
+def _matches_op(entry: str, base_op: str) -> bool:
+    """Check if an opcode entry declared in schema matches the descriptor operation."""
+    entry = entry.lower()
+    base = base_op.lower()
+    if entry == base:
+        return True
+    if base.startswith("arith.") or base.startswith("tt."):
+        suffix = base.split(".", 1)[1]
+        if entry == suffix or entry in suffix:
+            return True
+    return entry in base
+
+
 def enumerate_candidates(
     schema: IsaSchema,
     kind: str,
@@ -67,31 +80,38 @@ def enumerate_candidates(
 
     out: list[Candidate] = []
     for instruction in schema.of_kind(kind):
-        # Direction is checked before the predicate, and recorded as a rejection
-        # rather than a filter, because postcondition 1 says nothing is
-        # pre-filtered: "STG is not a load" belongs in the audit trail next to
-        # the cost-based rejections. An instruction that declares no direction
-        # serves both, so an ISA that does not split loads from stores sees no
-        # change at all.
         serves = getattr(instruction, "serves", None)
         if direction is not None and callable(serves) and not serves(direction):
             out.append(
                 Candidate(
                     instruction,
                     False,
-                    f"declared direction {getattr(instruction, 'direction', None)!r} "
+                    f"declared direction {getattr(instruction, "direction", None)!r} "
                     f"cannot lower a {direction}",
                     None,
                 )
             )
             continue
         verdict = evaluate(reason_of(instruction), descriptor, tile, env)
+        reason: str | None = None
+
+        if verdict is True:
+            # For elementwise instructions that declare specific opcodes,
+            # ensure the instruction matches the target operation opcode.
+            if kind == "elementwise" and getattr(instruction, "ops", None) and instruction.name not in ("EPI", "VPU"):
+                base_op = getattr(descriptor, "base", None)
+                if base_op and isinstance(base_op, str) and not base_op.startswith("%"):
+                    if not any(_matches_op(entry, base_op) for entry in instruction.ops):
+                        verdict = False
+                        reason = f"op mismatch: {base_op} not in {list(instruction.ops)}"
+
         if verdict is True:
             cost: float | None = cost_of(instruction, descriptor, tile, env)
             out.append(Candidate(instruction, True, None, cost))
         else:
             text = reason_of(instruction)
-            reason = text if verdict is False else f"unknown: {text}"
+            if reason is None:
+                reason = text if verdict is False else f"unknown: {text}"
             out.append(Candidate(instruction, False, reason, None))
     return tuple(out)
 
@@ -126,10 +146,6 @@ def select(
             gap=0.0,
             no_admissible_lowering=True,
         )
-    # Tie-break by enumeration position: `of_kind` returns declaration order on
-    # every schema shape (the real one sorts by `declaration_index`; the stand-in
-    # preserves its tuple), so position *is* the deterministic tie-break without
-    # depending on an attribute the stand-in does not carry.
     order = {id(c.instruction): i for i, c in enumerate(candidates)}
     best = min(admissible, key=lambda c: (c.cost, order[id(c.instruction)]))
     oracle = oracle_min(schema, kind, descriptor, tile, env, direction)

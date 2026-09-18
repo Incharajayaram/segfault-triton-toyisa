@@ -1,21 +1,7 @@
-"""Parity tests for the optional C++ emulator backend.
-
-Skipped whole-module unless the extension is built. It is not built by
-`pip install .` today -- `pyproject.toml` uses the plain setuptools backend, so
-`CMakeLists.txt` and `emu/cpp/` are never compiled (KNOWN_GAPS.md G5) -- so in a
-default checkout every case here skips. That is the honest state, and it is what
-this file should report.
-
-Written against stdlib `unittest`, like the rest of the suite: `run_tests.py` is
-the runner and pytest is not a dependency of this project. The previous version
-used `pytest.skip(allow_module_level=True)`, `pytest.approx` and `pytest.raises`,
-so importing it raised ImportError during collection and the module was reported
-as a hard ERROR rather than as a skip.
-"""
-
-import unittest
+"""Tests for the C++ emulator backend."""
 
 import numpy as np
+import pytest
 
 from triton_toyisa.emit.ir import (
     Imm,
@@ -31,47 +17,18 @@ from triton_toyisa.emu import HAS_CPP
 from triton_toyisa.emu.exec import emulate
 from triton_toyisa.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
 
-if HAS_CPP:  # pragma: no cover - only where the extension is built
-    from triton_toyisa.emu._emu_cpp import (
-        PrecisionPolicy as CppPrecisionPolicy,
-    )
-    from triton_toyisa.emu._emu_cpp import (
-        ProgramNotExecutable,
-        UnsupportedInstruction,
-    )
-    from triton_toyisa.emu._emu_cpp import (
-        derive_tolerance as cpp_derive_tolerance,
-    )
-    from triton_toyisa.emu._emu_cpp import (
-        tf32_truncate as cpp_tf32_truncate,
-    )
+if not HAS_CPP:
+    pytest.skip("C++ backend is not installed", allow_module_level=True)
+
+from triton_toyisa.emu._emu_cpp import (
+    PrecisionPolicy as CppPrecisionPolicy,
+    derive_tolerance as cpp_derive_tolerance,
+    tf32_truncate as cpp_tf32_truncate,
+    ProgramNotExecutable,
+    UnsupportedInstruction,
+)
 
 
-class _assert_raises:
-    """`pytest.raises(..., match=...)` without pytest: substring, not regex.
-
-    The original used a regex `match=`, and two of its patterns contained an
-    unescaped `.` (`"tt.invalid_op_does_not_exist"`). A substring test is what
-    was actually meant and cannot silently match the wrong message.
-    """
-
-    def __init__(self, expected, needle):
-        self.expected, self.needle = expected, needle
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        if exc_type is None:
-            raise AssertionError(f"{self.expected.__name__} was not raised")
-        if not issubclass(exc_type, self.expected):
-            return False
-        if self.needle not in str(exc):
-            raise AssertionError(f"{self.needle!r} not in {str(exc)!r}")
-        return True
-
-
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_tf32_truncate():
     """Test that the C++ tf32_truncate produces exactly the same bits as the Python one."""
     # Some finite values, subnormals, and exactly halfway values to test rounding.
@@ -81,20 +38,18 @@ def test_tf32_truncate():
     np.testing.assert_array_equal(py_trunc, cpp_trunc, strict=True)
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_derive_tolerance():
     """Test that the C++ derived tolerance matches the Python one."""
     py_tol = derive_tolerance("tf32", 64, "f32")
     cpp_tol = cpp_derive_tolerance("tf32", 64, "f32")
-    assert abs(py_tol.value - cpp_tol.value) < 1e-12
+    assert pytest.approx(py_tol.value) == cpp_tol.value
     assert py_tol.absolute == cpp_tol.absolute
 
     py_tol = derive_tolerance("ieee", 128, "f32")
     cpp_tol = cpp_derive_tolerance("ieee", 128, "f32")
-    assert abs(py_tol.value - cpp_tol.value) < 1e-12
+    assert pytest.approx(py_tol.value) == cpp_tol.value
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_precision_policy_mac():
     """Test C++ PrecisionPolicy.multiply_accumulate matches Python exactly."""
     a = np.random.rand(16, 32).astype(np.float32)
@@ -110,7 +65,6 @@ def test_precision_policy_mac():
     np.testing.assert_array_equal(py_acc, cpp_acc, strict=True)
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_elementwise_addi():
     """Test a basic elementwise operation in the C++ emulator."""
     # Minimal program: arith.addi on two scalar inputs, then store
@@ -149,7 +103,6 @@ def test_elementwise_addi():
     np.testing.assert_array_equal(outputs["Out"], outputs_py["Out"])
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_loop():
     """Test loop execution in the C++ emulator."""
     prog = Program(
@@ -200,7 +153,6 @@ def test_loop():
     np.testing.assert_array_equal(outputs["Out"], np.array([15], dtype=np.float32))
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_program_id():
     """Test get_program_id with grid parameters in the C++ emulator."""
     prog = Program(
@@ -250,7 +202,6 @@ def test_program_id():
     np.testing.assert_array_equal(outputs["OutY"], outputs_py["OutY"])
 
 
-@unittest.skipUnless(HAS_CPP, "C++ backend is not built")
 def test_exceptions():
     """Test that unsupported ops raise UnsupportedInstruction, and markers raise ProgramNotExecutable."""
     prog_invalid_op = Program(
@@ -269,7 +220,7 @@ def test_exceptions():
     inputs = {"Out": np.array([0], dtype=np.float32)}
 
     # Invalid op raises UnsupportedInstruction (not implemented by machine)
-    with _assert_raises(UnsupportedInstruction, "tt.invalid_op_does_not_exist"):
+    with pytest.raises(UnsupportedInstruction, match="tt.invalid_op_does_not_exist"):
         emulate(prog_invalid_op, inputs, use_cpp=True)
 
     prog_with_marker = Program(
@@ -286,6 +237,6 @@ def test_exceptions():
     )
 
     # UNSUPPORTED marker raises ProgramNotExecutable
-    with _assert_raises(ProgramNotExecutable, "tt.something_hard"):
+    with pytest.raises(ProgramNotExecutable, match="tt.something_hard"):
         emulate(prog_with_marker, inputs, use_cpp=True)
 

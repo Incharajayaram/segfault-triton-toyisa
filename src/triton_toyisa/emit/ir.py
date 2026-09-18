@@ -345,6 +345,16 @@ class Instr:
 
 
 @dataclass(frozen=True)
+class AsyncOp:
+    """An asynchronous accelerator operation handle (e.g. Vortex DXA async copy, WGMMA launch)."""
+
+    handle: str
+    launch_instr: Instr
+    wait_instr: Instr | None = None
+    completion_barrier: int | None = None
+
+
+@dataclass(frozen=True)
 class Loop:
     """A recovered `scf.for`, with the values it threads (EC-074, EC-075).
 
@@ -414,6 +424,7 @@ class Program:
     unsupported: tuple[UnsupportedMarker, ...] = ()
     total_cost: float = 0.0
     inputs: tuple[str, ...] = ()
+    async_ops: tuple[AsyncOp, ...] = ()
 
     def __post_init__(self) -> None:
         validate_program(self)

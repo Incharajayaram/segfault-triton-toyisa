@@ -208,9 +208,11 @@ static Program convert_program(const py::object& obj) {
         }
     }
 
-    // Also check for markers.
-    auto markers = obj.attr("markers")();
-    // (markers are already embedded in items via execution_order)
+    // Also check for markers (e.g. from program.unsupported).
+    for (auto item : obj.attr("markers")()) {
+        py::object it = py::reinterpret_borrow<py::object>(item);
+        prog.items.push_back(convert_marker(it));
+    }
 
     return prog;
 }

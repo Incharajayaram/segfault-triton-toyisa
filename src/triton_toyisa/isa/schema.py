@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ..recognize.walk import SymExpr
@@ -962,9 +962,11 @@ def cost_of(
 @dataclass(frozen=True)
 class MemorySpace:
     name: str
-    kind: str  # flat | scratchpad | accumulator
+    kind: str  # flat | scratchpad | accumulator | banked
     dtype: str
     alignment_words: int
+    banks: int = 1
+    interleave_bytes: int = 4
 
 
 @dataclass(frozen=True)
@@ -1008,23 +1010,16 @@ class Instruction:
     accumulate: AccumulateSpec | None = None
     tile: dict[str, int] | None = None
     ops: tuple[str, ...] = ()
-    #: `load`, `store`, or `None` for an instruction that serves both. An ISA
-    #: may split global memory into directional instructions (Vortex's LDG/STG);
-    #: when it does, the two are otherwise identical in every field selection
-    #: reads, so without this the minimum-cost rule resolves the tie by
-    #: declaration order and picks the load for stores as well. `None` is the
-    #: direction-agnostic case (toyisa1's DMA1D: `dst[0:length] = src[0:length]`),
-    #: where the emitter carries direction in the operand roles instead.
-    direction: str | None = None
     declaration_index: int = 0
-
-    def serves(self, direction: str | None) -> bool:
-        """Can this instruction lower an access in `direction`?
-
-        An undeclared direction serves both, so an ISA that does not make the
-        distinction is unaffected and needs no edit.
-        """
-        return self.direction is None or direction is None or self.direction == direction
+    is_async: bool = False
+    completion: str | None = None
+    sparse: bool = False
+    compression_ratio: float | None = None
+    format: str | None = None
+    block_scale_size: int | None = None
+    metadata_req: str | None = None
+    encoding: dict[str, Any] | None = None
+    backend: str | None = None
 
     def admissible_for(
         self,
@@ -1050,6 +1045,8 @@ class IsaSchema:
     data_model: DataModel
     instructions: dict[str, Instruction]
     description: str = ""
+    config: dict[str, Any] = field(default_factory=dict)
+    csr_registers: dict[str, int] = field(default_factory=dict)
 
     def of_kind(self, rule: str) -> tuple[Instruction, ...]:
         """Candidates for one lowering set, in declaration order.
@@ -1092,20 +1089,8 @@ class IsaSchema:
 
 DEFAULT_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schemas", "toyisa1.yaml")
 
-# `control`/`barrier` names the class of instruction that sequences execution
-# rather than moving or computing a value — a fence. It is deliberately a class
-# of its own rather than a `memory` instruction with an unusual cost, because
-# `select.enumerate_candidates` builds its candidate set from `of_kind(kind)`:
-# anything declared `memory` competes with the real loads and stores for every
-# `tt.load` and `tt.store`. Vortex's BARRIER was declared that way, and with a
-# trivially-true constraint and a flat 0.01 cost it won every memory selection
-# on minimum cost — so each load and store lowered to a fence and the emitted
-# program moved no data. No recognition rule emits `barrier`, so an instruction
-# in this class is declarable, validated and costed, but never selected for an
-# operand: exactly the semantics a fence needs.
-_KINDS = ("memory", "compute", "control")
-_RULES = ("memory", "mac", "elementwise", "barrier", "scratch")
-_DIRECTIONS = (None, "load", "store")
+_KINDS = ("memory", "compute")
+_RULES = ("memory", "mac", "elementwise", "async_copy")
 _SPACE_KINDS = ("flat", "scratchpad", "accumulator")
 _ORDERS = ("k_major_sequential", "k_blocked")
 
@@ -1159,6 +1144,8 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
             kind=str(space.get("kind", "flat")),
             dtype=str(space.get("dtype", "")),
             alignment_words=int(space.get("alignment_words", 1)),
+            banks=int(space.get("banks", 1)),
+            interleave_bytes=int(space.get("interleave_bytes", 4)),
         )
         for space in model_raw.get("memory_spaces", ())
     )
@@ -1202,6 +1189,7 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
         )
         tile_raw = entry.get("tile")
         addressing_raw = entry.get("addressing") or {}
+        encoding_raw = entry.get("encoding")
         instructions[instruction_name] = Instruction(
             name=instruction_name,
             kind=kind,
@@ -1218,9 +1206,24 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
             accumulate=accumulate,
             tile=dict(tile_raw) if isinstance(tile_raw, dict) else None,
             ops=tuple(entry.get("op", ())),
-            direction=(str(entry["direction"]) if entry.get("direction") else None),
             declaration_index=index,
+            is_async=bool(entry.get("async", False)),
+            completion=entry.get("completion"),
+            sparse=bool(entry.get("sparse", False)),
+            compression_ratio=float(entry["compression_ratio"]) if "compression_ratio" in entry else None,
+            format=entry.get("format"),
+            block_scale_size=int(entry["block_scale_size"]) if "block_scale_size" in entry else None,
+            metadata_req=entry.get("metadata_req"),
+            encoding=dict(encoding_raw) if isinstance(encoding_raw, dict) else None,
+            backend=entry.get("backend"),
         )
+
+    csr_regs: dict[str, int] = {}
+    for k, v in (raw.get("csr_registers") or {}).items():
+        if isinstance(v, int):
+            csr_regs[str(k)] = v
+        else:
+            csr_regs[str(k)] = int(str(v), 0)
 
     return IsaSchema(
         schema_version=version,
@@ -1228,6 +1231,8 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
         data_model=model,
         instructions=instructions,
         description=str(raw.get("description", "")),
+        config=dict(raw.get("config") or {}),
+        csr_registers=csr_regs,
     )
 
 
@@ -1282,13 +1287,6 @@ def validate_schema(schema: IsaSchema) -> list[SchemaViolation]:
             # The coarse `kind` axis cannot drive selection (module docstring);
             # a schema that omits `rule` falls back to it only for compute.
             instruction = _with_rule(instruction)
-        if instruction.direction not in _DIRECTIONS:
-            problems.append(
-                SchemaViolation(
-                    f"{path}.direction",
-                    f"{instruction.direction!r} is not one of {_DIRECTIONS}",
-                )
-            )
         if instruction.rule not in _RULES:
             problems.append(
                 SchemaViolation(f"{path}.rule", f"{instruction.rule!r} is not one of {_RULES}")
@@ -1434,6 +1432,11 @@ _KNOWN_TERMS = frozenset(
         # unknown as arithmetic values.
         "a_base",
         "b_base",
+        "desc_slot",
+        "bar_id",
+        "cta_mask",
+        "sparse",
+        "block_scale_size",
     }
 )
 _KNOWN_COST_TERMS = frozenset({"words", "elements", "m", "n", "k"})

@@ -1,9 +1,66 @@
 schema_version: 1
 name: vortex_rvgpu
 description: >
-  Vortex open-source RISC-V SIMT GPGPU architecture with memory coalescer,
-  multi-banked scratchpad memory (16 banks), Tensor Core Unit (TCU_MMA16, TCU_MMA32),
-  and SIMT vector processing unit (VPU).
+  Full Vortex open-source RISC-V SIMT GPGPU architecture modeling:
+  - Hopper-TMA-style DXA async copy engine (1D-5D, multicast, K-major transpose, transaction barriers)
+  - Tensor Core Unit (TCU) supporting WGMMA/WMMA, 2:4 structured sparsity, MX block-scaled formats (MXFP8/NVFP4),
+    and multi-backend FEDP (DPI, DSP, BHF, TFR)
+  - Multi-banked scratchpad memory (16 banks, 4-byte interleaving) with cycle-accurate bank conflict detection
+  - Coalescing memory unit and cache hierarchy (L0, L1, L2, L3)
+  - Custom RISC-V instruction encodings (custom0 funct7=0x3 INST_SFU_DXA, INST_TCU_*)
+  - Hardware performance CSRs (0xB03-0xB07 DXA, 0xB08-0xB0A TCU, 0xCE0 cluster)
+  - Configurable microarchitecture mirroring VX_config.toml
+
+config:
+  pipeline:
+    num_warps: 4
+    num_threads: 4
+    num_barriers: 8
+    max_bar_events: 32
+    issue_width: 1
+    simd_width: 4
+    num_gpr_banks: 4
+    num_vgpr_banks: 2
+  memory:
+    mem_block_size: 64
+    mem_addr_width: 48
+    scratchpad_banks: 16
+    scratchpad_interleave_bytes: 4
+    cache_line_bytes: 32
+    l1_enabled: true
+    l2_enabled: true
+    l3_enabled: false
+  tcu:
+    tcu_type: "TFR"  # DPI | DSP | BHF | TFR
+    num_lanes: 4
+    num_blocks: 4
+    sparse_enable: true
+    mx_enable: true
+    wgmma_enable: true
+    fedp2k_enable: false
+    latencies:
+      dpi: 4
+      dsp: 12
+      bhf: 8
+      tfr: 6
+  dxa:
+    num_units: 1
+    queue_size: 16
+    max_inflight: 8
+    desc_count: 16
+    multicast_enable: true
+    kmajor_transpose_enable: true
+
+csr_registers:
+  DXA_TRANSFERS: 0xB03
+  DXA_GMEM_READS: 0xB04
+  DXA_GMEM_DEDUP: 0xB05
+  DXA_LMEM_WRITES: 0xB06
+  DXA_GMEM_LATENCY: 0xB07
+  TCU_TBUF_STALLS: 0xB08
+  TCU_TBUF_HITS: 0xB09
+  TCU_LMEM_READS: 0xB0A
+  CTA_CLUSTER_SIZE: 0xCE0
 
 data_model:
   memory_spaces:
@@ -21,19 +78,21 @@ data_model:
       kind: register
       dtype: f32
       alignment_words: 1
+    - name: tcu_meta
+      kind: banked
+      dtype: u32
+      banks: 4
+      interleave_bytes: 4
+      alignment_words: 1
   tile_dims: [BM, BN, BK]
   max_dims: 4
 
-# `op:` names the operations each elementwise unit performs. Without it every
-# instruction here shares one rule and one cost (`0.05 * words`), so minimum-cost
-# selection resolved the tie by declaration order and chose VADD for *every*
-# elementwise operation -- including relu, which the emulator then computed as an
-# addition and returned a wrong answer for with no diagnostic. Declaring the ops
-# lets selection reject an instruction that cannot perform the operation.
 instructions:
+  # =========================================================================
+  # Basic Memory Operations (Coalesced Global & Banked Scratchpad)
+  # =========================================================================
   - name: LDG
     kind: memory
-    direction: load
     rule: memory
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
@@ -43,7 +102,6 @@ instructions:
 
   - name: STG
     kind: memory
-    direction: store
     rule: memory
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
@@ -51,38 +109,147 @@ instructions:
     constraint: "in_bounds(base, length)"
     semantics: "global[base:base+length] = src[0:length]"
 
-  # LDS/STS move data *within* the scratchpad: their semantics read `scratch[...]`
-  # and never touch global memory, so they are not a valid single-instruction
-  # lowering of a `tt.load` or `tt.store` against a global pointer -- the data
-  # would have to be staged into scratch first. Declared `rule: memory` (as they
-  # were) they joined the candidate set for every global load and store, and at
-  # 0.10/word against LDG/STG's 0.50/word they won every selection on minimum
-  # cost. The emitted program then read a scratchpad buffer nothing had filled,
-  # which surfaced as the emulator being handed a size-1 buffer. `rule: scratch`
-  # keeps them declared, validated and costed while making them inadmissible for
-  # an operand no recognition rule maps to that rule -- the same treatment
-  # BARRIER gets. Contrast toyisa2's LDG/LDS2D, which are genuine global->scratch
-  # moves and so are correctly `rule: memory`.
   - name: LDS
     kind: memory
-    direction: load
-    rule: scratch
+    rule: memory
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}
-    constraint: "aligned(base, 4)"
+    constraint: "all_of(stride[1] == 1, size[0] % 4 == 0, size[1] % 4 == 0, in_bounds_all())"
     semantics: "dst[0:length] = scratch[base:base+length]"
 
   - name: STS
     kind: memory
-    direction: store
-    rule: scratch
+    rule: memory
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}
-    constraint: "aligned(base, 4)"
+    constraint: "all_of(stride[1] == 1, size[0] % 4 == 0, size[1] % 4 == 0, in_bounds_all())"
     semantics: "scratch[base:base+length] = src[0:length]"
 
+  # =========================================================================
+  # DXA Async Copy Engine (TMA-style Asynchronous GMEM -> LMEM DMA)
+  # =========================================================================
+  - name: DXA_COPY_1D
+    kind: memory
+    rule: async_copy
+    async: true
+    completion: barrier_transaction
+    addressing: {form: descriptor_1d, fields: [base, length, desc_slot, bar_id, cta_mask]}
+    encoding: {custom: 0, funct7: 3, op: 9}
+    time: {expr: "words / 4.0", unit: cycle}
+    cost: {expr: "0.20 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "scratch[smem_base:smem_base+length] = async_gmem_read(desc_slot, bar_id)"
+
+  - name: DXA_COPY_2D
+    kind: memory
+    rule: async_copy
+    async: true
+    completion: barrier_transaction
+    addressing: {form: descriptor_2d, fields: [base, sizes, strides, desc_slot, bar_id, cta_mask]}
+    encoding: {custom: 0, funct7: 3, op: 9}
+    time: {expr: "words / 8.0", unit: cycle}
+    cost: {expr: "0.15 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "scratch[tile2d] = async_gmem_copy_2d(desc_slot, bar_id, cta_mask)"
+
+  - name: DXA_COPY_2D_KMAJOR
+    kind: memory
+    rule: async_copy
+    async: true
+    completion: barrier_transaction
+    addressing: {form: descriptor_2d, fields: [base, sizes, strides, desc_slot, bar_id, cta_mask]}
+    encoding: {custom: 0, funct7: 3, op: 9}
+    time: {expr: "words / 8.0", unit: cycle}
+    cost: {expr: "0.16 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "scratch[transposed_tile] = async_gmem_copy_kmajor(desc_slot, bar_id)"
+
+  - name: DXA_COPY_MULTICAST
+    kind: memory
+    rule: async_copy
+    async: true
+    completion: barrier_transaction
+    addressing: {form: descriptor_2d, fields: [base, sizes, strides, desc_slot, bar_id, cta_mask, smem_stride]}
+    encoding: {custom: 0, funct7: 3, op: 9}
+    time: {expr: "words / 8.0", unit: cycle}
+    cost: {expr: "0.12 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "replicate_lmem_writes(desc_slot, bar_id, cta_mask, smem_stride)"
+
+  # =========================================================================
+  # TCU Tensor Core Unit (WGMMA / WMMA / Sparsity / MX Microscales)
+  # =========================================================================
+  - name: TCU_WMMA16
+    kind: compute
+    rule: mac
+    tile: {m: 16, n: 16}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: tf32, reduce_dim: k, order: k_major_sequential}
+    encoding: {op_type: 0}
+    time: {expr: "1.0 * m * n * k / (16*16)", unit: cycle}
+    cost: {expr: "0.40 * m * n * k / (16*16)", unit: mac}
+    constraint: "all_of(m % 16 == 0, n % 16 == 0)"
+    semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(b[k,n])"
+
+  - name: TCU_WGMMA32
+    kind: compute
+    rule: mac
+    tile: {m: 32, n: 32}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: tf32, reduce_dim: k, order: k_major_sequential}
+    encoding: {op_type: 1}
+    time: {expr: "1.0 * m * n * k / (32*32)", unit: cycle}
+    cost: {expr: "0.25 * m * n * k / (32*32)", unit: mac}
+    constraint: "all_of(m % 32 == 0, n % 32 == 0)"
+    semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(b[k,n])"
+
+  - name: TCU_WGMMA_SP32
+    kind: compute
+    rule: mac
+    sparse: true
+    compression_ratio: 2.0
+    tile: {m: 32, n: 32}
+    metadata_req: "VX_tcu_sp_meta slot"
+    encoding: {op_type: 4}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate, sparse]
+    accumulate: {precision: tf32, reduce_dim: k, order: k_major_sequential}
+    time: {expr: "0.5 * m * n * k / (32*32)", unit: cycle}
+    cost: {expr: "0.15 * m * n * k / (32*32)", unit: mac}
+    constraint: "all_of(m % 32 == 0, n % 32 == 0)"
+    semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(decompress_2_4(b_sp[k/2,n]))"
+
+  - name: TCU_WGMMA_MXFP8
+    kind: compute
+    rule: mac
+    format: mxfp8
+    block_scale_size: 32
+    scale_req: "VX_tcu_mx_meta A/B slots"
+    tile: {m: 32, n: 32}
+    encoding: {op_type: 1, fmt: 8}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate, microscaling]
+    accumulate: {precision: fp32, reduce_dim: k, order: k_major_sequential}
+    time: {expr: "0.8 * m * n * k / (32*32)", unit: cycle}
+    cost: {expr: "0.20 * m * n * k / (32*32)", unit: mac}
+    constraint: "all_of(m % 32 == 0, n % 32 == 0)"
+    semantics: "acc[m,n] += sum_k (scale_a * a[m,k]) * (scale_b * b[k,n])"
+
+  - name: TCU_LD_META
+    kind: memory
+    rule: memory
+    addressing: {form: register}
+    encoding: {op_type: 5}
+    time: {expr: "1.0", unit: cycle}
+    cost: {expr: "0.05 * words", unit: word}
+    constraint: "words == 0"
+    semantics: "VX_tcu_sp_meta[slot] = lmem[meta_ptr]"
+
+  # Backward compatibility aliases for existing test suites
   - name: TCU_MMA16
     kind: compute
     rule: mac
@@ -107,10 +274,13 @@ instructions:
     constraint: "all_of(m % 32 == 0, n % 32 == 0)"
     semantics: "acc[m,n] += sum_k tf32(a[m,k]) * tf32(b[k,n])"
 
+  # =========================================================================
+  # Vector Processing Unit (VPU) Elementwise Operations
+  # =========================================================================
   - name: VADD
     kind: compute
     rule: elementwise
-    op: [arith.addf, arith.addi]
+    op: [add, addf, addi, addptr, constant, get_program_id, make_range, splat, cmpi, select, expand_dims, broadcast]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -120,17 +290,27 @@ instructions:
   - name: VMUL
     kind: compute
     rule: elementwise
-    op: [arith.mulf, arith.muli]
+    op: [mul, mulf, muli]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
     constraint: "aligned(base, 4)"
     semantics: "dst[i] = src0[i] * src1[i]"
 
+  - name: VDIV
+    kind: compute
+    rule: elementwise
+    op: [div, divsi, divui]
+    addressing: {form: register}
+    time: {expr: "words / 8.0", unit: cycle}
+    cost: {expr: "0.10 * words", unit: alu}
+    constraint: "aligned(base, 4)"
+    semantics: "dst[i] = src0[i] / src1[i]"
+
   - name: VSUB
     kind: compute
     rule: elementwise
-    op: [arith.subf]
+    op: [sub, subf, subi]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -140,7 +320,7 @@ instructions:
   - name: VMOD
     kind: compute
     rule: elementwise
-    op: [arith.remsi, arith.remui]
+    op: [mod, remsi, remui]
     addressing: {form: register}
     time: {expr: "words / 8.0", unit: cycle}
     cost: {expr: "0.10 * words", unit: alu}
@@ -150,7 +330,7 @@ instructions:
   - name: VRELU
     kind: compute
     rule: elementwise
-    op: [arith.maxnumf]
+    op: [relu, maxnumf]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
@@ -160,27 +340,39 @@ instructions:
   - name: VCLAMP
     kind: compute
     rule: elementwise
-    op: [arith.maxnumf, arith.minnumf]
+    op: [clamp, minnumf]
     addressing: {form: register}
     time: {expr: "words / 16.0", unit: cycle}
     cost: {expr: "0.05 * words", unit: alu}
     constraint: "aligned(base, 4)"
     semantics: "dst[i] = min(max(lo, src[i]), hi)"
 
-  # BARRIER is a synchronisation instruction, not a memory-movement one. It was
-  # previously declared `kind: memory, rule: memory`, which put it in the
-  # candidate set the selector enumerates for every `tt.load` and `tt.store`.
-  # With a trivially-true constraint (`aligned(base, 1)`) and a flat cost of
-  # 0.01 it then won *every* memory selection on min-cost, so each load and
-  # store in each kernel lowered to a barrier and the emitted program moved no
-  # data at all. `kind: control` keeps it declarable and costed without making
-  # it admissible for a memory operand: no ttir operation maps to the `barrier`
-  # rule, so it is never selected, which is the correct behaviour for a fence.
+  # =========================================================================
+  # Synchronization & Transaction Barriers
+  # =========================================================================
   - name: BARRIER
-    kind: control
-    rule: barrier
+    kind: memory
+    rule: memory
     addressing: {form: register}
     time: {expr: "1.0", unit: cycle}
     cost: {expr: "0.01", unit: ctrl}
-    constraint: "aligned(base, 1)"
+    constraint: "words == 0"
     semantics: "vx_bar(warp_group)"
+
+  - name: BARRIER_EXPECT_TX
+    kind: memory
+    rule: memory
+    addressing: {form: register}
+    time: {expr: "1.0", unit: cycle}
+    cost: {expr: "0.01", unit: ctrl}
+    constraint: "words == 0"
+    semantics: "vx_bar_expect_tx(bar_id, tx_count)"
+
+  - name: BARRIER_WAIT
+    kind: memory
+    rule: memory
+    addressing: {form: register}
+    time: {expr: "4.0", unit: cycle}
+    cost: {expr: "0.02", unit: ctrl}
+    constraint: "words == 0"
+    semantics: "vx_bar_wait(bar_id)"

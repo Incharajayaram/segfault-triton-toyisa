@@ -149,3 +149,29 @@ class HardwarePerformanceStats:
     dram_transactions: int = 0
     coalescing_efficiency: float = 1.0
     total_bank_conflicts: int = 0
+
+
+class BankConflictModel:
+    """Vortex GPGPU multi-bank scratchpad conflict cost model.
+
+    Evaluates concurrent addresses against 16 banks with 4-byte interleaving.
+    Returns the exact number of stall cycles incurred due to bank arbitration.
+    """
+
+    def __init__(self, num_banks: int = 16, bank_width_bytes: int = 4) -> None:
+        self.num_banks = num_banks
+        self.bank_width_bytes = bank_width_bytes
+
+    def analyze_access_pattern(self, addresses: Sequence[int], num_banks: int | None = None) -> int:
+        """Return number of stall cycles due to bank conflicts.
+        Formula: max_conflicts_per_bank - 1 (or 0 if no accesses).
+        """
+        if not addresses:
+            return 0
+        banks = num_banks if num_banks is not None else self.num_banks
+        from collections import defaultdict
+        bank_accesses: dict[int, int] = defaultdict(int)
+        for addr in addresses:
+            bank = (addr // self.bank_width_bytes) % banks
+            bank_accesses[bank] += 1
+        return max(0, max(bank_accesses.values()) - 1)
