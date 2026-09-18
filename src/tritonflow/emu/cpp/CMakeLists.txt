@@ -5,7 +5,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Find pybind11.
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -m pybind11 --cmakedir
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    OUTPUT_VARIABLE pybind11_DIR
+    RESULT_VARIABLE pybind11_STATUS
+)
+if(pybind11_STATUS EQUAL 0 AND EXISTS "${pybind11_DIR}")
+    list(APPEND CMAKE_PREFIX_PATH "${pybind11_DIR}")
+endif()
+
 find_package(pybind11 REQUIRED)
 
 # The C++ emulator library (static, linked into the Python module).

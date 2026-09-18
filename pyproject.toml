@@ -14,7 +14,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
   "ruff>=0.6",
+  "rich>=13.0",
+  "pybind11>=2.11",
+]
+cpp = [
+  "pybind11>=2.11",
 ]
 # The only extra that needs Triton or torch. Kept separate so the test suite
 # runs without either (see docs/team/testing-ci.md S3).
