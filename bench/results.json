@@ -18,10 +18,10 @@
     "cpu_count": 12,
     "gpu": false,
     "machine": "x86_64",
-    "platform": "Linux-6.19.14+kali-amd64-x86_64-with-glibc2.42",
-    "python": "3.13.14",
+    "platform": "Linux-6.18.52-1-lts-x86_64-with-glibc2.44",
+    "python": "3.14.7",
     "seed": 24173,
-    "utc": "2026-09-17T12:58:08Z"
+    "utc": "2026-09-18T04:03:07Z"
   },
   "results": [
     {
@@ -70,7 +70,7 @@
       "tier": "t0_vecadd",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.85
+      "value": null
     },
     {
       "formula": "selected_total_cost / min over exhaustively enumerated valid lowerings",
@@ -82,7 +82,7 @@
       "tier": "t0_vecadd",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 1.0
+      "value": null
     },
     {
       "formula": "instructions emitted, plus raw ttir op count for context",
@@ -95,8 +95,8 @@
       "unit": "count",
       "upper_bound": false,
       "value": {
-        "emitted": 4,
-        "raw_ops": 21
+        "emitted": 18,
+        "raw_ops": 20
       }
     },
     {
@@ -109,7 +109,7 @@
       "tier": "t0_vecadd",
       "unit": "ns",
       "upper_bound": false,
-      "value": 2796725.0
+      "value": 54758821.0
     },
     {
       "formula": "max relative error vs eager reference, compared under the derived tolerance",
@@ -121,7 +121,7 @@
       "tier": "t0_vecadd",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.0
+      "value": null
     },
     {
       "formula": "every value-producing op is annotated or provably elided",
@@ -169,7 +169,7 @@
       "tier": "t1_matmul",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.8333333333333334
+      "value": null
     },
     {
       "formula": "selected_total_cost / min over exhaustively enumerated valid lowerings",
@@ -181,7 +181,7 @@
       "tier": "t1_matmul",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 1.0
+      "value": null
     },
     {
       "formula": "instructions emitted, plus raw ttir op count for context",
@@ -194,8 +194,8 @@
       "unit": "count",
       "upper_bound": false,
       "value": {
-        "emitted": 5,
-        "raw_ops": 64
+        "emitted": 59,
+        "raw_ops": 63
       }
     },
     {
@@ -208,7 +208,7 @@
       "tier": "t1_matmul",
       "unit": "ns",
       "upper_bound": false,
-      "value": 7903828.0
+      "value": 101670500.0
     },
     {
       "formula": "max relative error vs eager reference, compared under the derived tolerance",
@@ -220,7 +220,7 @@
       "tier": "t1_matmul",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.00036359758814796805
+      "value": null
     },
     {
       "formula": "every value-producing op is annotated or provably elided",
@@ -268,7 +268,7 @@
       "tier": "t2_matmul_relu",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.8333333333333334
+      "value": null
     },
     {
       "formula": "selected_total_cost / min over exhaustively enumerated valid lowerings",
@@ -280,7 +280,7 @@
       "tier": "t2_matmul_relu",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 1.0
+      "value": null
     },
     {
       "formula": "instructions emitted, plus raw ttir op count for context",
@@ -293,8 +293,8 @@
       "unit": "count",
       "upper_bound": false,
       "value": {
-        "emitted": 6,
-        "raw_ops": 71
+        "emitted": 66,
+        "raw_ops": 70
       }
     },
     {
@@ -307,7 +307,7 @@
       "tier": "t2_matmul_relu",
       "unit": "ns",
       "upper_bound": false,
-      "value": 13089143.0
+      "value": 108561330.0
     },
     {
       "formula": "max relative error vs eager reference, compared under the derived tolerance",
@@ -319,7 +319,7 @@
       "tier": "t2_matmul_relu",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.00036359758814796805
+      "value": null
     },
     {
       "formula": "every value-producing op is annotated or provably elided",
@@ -331,7 +331,7 @@
       "tier": "t3_modulo",
       "unit": "bool",
       "upper_bound": false,
-      "value": true
+      "value": false
     },
     {
       "formula": "annotated_value_ops / all_value_ops  (gameable; never the headline)",
@@ -343,7 +343,7 @@
       "tier": "t3_modulo",
       "unit": "ratio",
       "upper_bound": true,
-      "value": 1.0
+      "value": 0.9259259259259259
     },
     {
       "formula": "largest connected annotated subgraph / dataflow-relevant graph",
@@ -355,7 +355,7 @@
       "tier": "t3_modulo",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 1.0
+      "value": 0.9259259259259259
     },
     {
       "formula": "selected_total_cost / hand_written_reference_cost",
@@ -367,7 +367,7 @@
       "tier": "t3_modulo",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.875
+      "value": null
     },
     {
       "formula": "selected_total_cost / min over exhaustively enumerated valid lowerings",
@@ -379,7 +379,7 @@
       "tier": "t3_modulo",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 1.0
+      "value": null
     },
     {
       "formula": "instructions emitted, plus raw ttir op count for context",
@@ -392,8 +392,8 @@
       "unit": "count",
       "upper_bound": false,
       "value": {
-        "emitted": 4,
-        "raw_ops": 30
+        "emitted": 25,
+        "raw_ops": 29
       }
     },
     {
@@ -406,7 +406,7 @@
       "tier": "t3_modulo",
       "unit": "ns",
       "upper_bound": false,
-      "value": 3572441.0
+      "value": 62101627.0
     },
     {
       "formula": "max relative error vs eager reference, compared under the derived tolerance",
@@ -418,7 +418,7 @@
       "tier": "t3_modulo",
       "unit": "ratio",
       "upper_bound": false,
-      "value": 0.0
+      "value": null
     }
   ],
   "schema": 1
