@@ -68,8 +68,8 @@ The framework provides three production-grade target models out of the box:
 
 | Target Identifier | Architecture Family | Memory Model | Compute Core Units | Key Features |
 |---|---|---|---|---|
-| **`toyisa1`** | Streaming ASIC | Flat 1D Shared Memory | `MAC8`, `MAC16` Systolic Arrays, `EPI` | Deterministic pipeline, 1D DMA engine |
-| **`toyisa2`** | Banked Scratchpad ASIC | 16-Bank Interleaved SRAM | `OPU32` Outer-Product Units, `VPU` | Bank-conflict cost arbitration |
+| **`tritonflow1`** | Streaming ASIC | Flat 1D Shared Memory | `MAC8`, `MAC16` Systolic Arrays, `EPI` | Deterministic pipeline, 1D DMA engine |
+| **`tritonflow2`** | Banked Scratchpad ASIC | 16-Bank Interleaved SRAM | `OPU32` Outer-Product Units, `VPU` | Bank-conflict cost arbitration |
 | **`vortex_rvgpu`** | RISC-V SIMT GPGPU | Hierarchical GMEM + LMEM | `TCU_WGMMA32`, `TCU_WMMA16`, `TCU_WGMMA_SP32`, `VADD`, `VMUL`, `VRELU` | **Hopper-TMA DXA async copy**, multicast deduplication, K-major transpose scatter, 4 FEDP backends, 2:4 structured sparsity, MXFP8 microscaling |
 
 ---
@@ -113,14 +113,14 @@ tests/unit/test_vortex_capabilities.py ..................                [100%]
 
 | Target ISA | Kernel Tier | Fully Lowered | Subgraph Coverage | Status / Refusal Reason | Modeled Latency |
 |---|---|:---:|:---:|---|:---:|
-| `toyisa1` | `t0_vecadd` | **YES** | 100% | Lowered to `DMA1D` + `EPI` | 5.3 ms |
-| `toyisa1` | `t1_matmul` | **YES** | 100% | Lowered to `DMA1D` + `MAC16` + `EPI` | 12.3 ms |
-| `toyisa1` | `t2_matmul_relu` | **YES** | 100% | Lowered to `DMA1D` + `MAC16` + `EPI` | 13.4 ms |
-| `toyisa1` | `t3_modulo` | **REFUSED** | 99% | **Refused**: Unstructured pointer modulo wraparound | 4.9 ms |
-| `toyisa2` | `t0_vecadd` | **YES** | 100% | Lowered to `LDG` + `VPU` | 4.5 ms |
-| `toyisa2` | `t1_matmul` | **YES** | 100% | Lowered to `LDG` + `OPU32` + `VPU` | 14.3 ms |
-| `toyisa2` | `t2_matmul_relu` | **YES** | 100% | Lowered to `LDG` + `OPU32` + `VPU` | 16.2 ms |
-| `toyisa2` | `t3_modulo` | **REFUSED** | 99% | **Refused**: Unstructured pointer modulo wraparound | 6.3 ms |
+| `tritonflow1` | `t0_vecadd` | **YES** | 100% | Lowered to `DMA1D` + `EPI` | 5.3 ms |
+| `tritonflow1` | `t1_matmul` | **YES** | 100% | Lowered to `DMA1D` + `MAC16` + `EPI` | 12.3 ms |
+| `tritonflow1` | `t2_matmul_relu` | **YES** | 100% | Lowered to `DMA1D` + `MAC16` + `EPI` | 13.4 ms |
+| `tritonflow1` | `t3_modulo` | **REFUSED** | 99% | **Refused**: Unstructured pointer modulo wraparound | 4.9 ms |
+| `tritonflow2` | `t0_vecadd` | **YES** | 100% | Lowered to `LDG` + `VPU` | 4.5 ms |
+| `tritonflow2` | `t1_matmul` | **YES** | 100% | Lowered to `LDG` + `OPU32` + `VPU` | 14.3 ms |
+| `tritonflow2` | `t2_matmul_relu` | **YES** | 100% | Lowered to `LDG` + `OPU32` + `VPU` | 16.2 ms |
+| `tritonflow2` | `t3_modulo` | **REFUSED** | 99% | **Refused**: Unstructured pointer modulo wraparound | 6.3 ms |
 | `vortex_rvgpu` | `t0_vecadd` | **YES** | 100% | Lowered to `LDG` + `VADD` | 5.4 ms |
 | `vortex_rvgpu` | `t1_matmul` | **YES** | 100% | Lowered to `LDG` + `TCU_MMA32` + `VADD`/`VMUL` | 17.2 ms |
 | `vortex_rvgpu` | `t2_matmul_relu` | **YES** | 100% | Lowered to `LDG` + `TCU_MMA32` + `VRELU` | 18.8 ms |
@@ -130,7 +130,7 @@ tests/unit/test_vortex_capabilities.py ..................                [100%]
 
 ### C. Cross-ISA Retargeting & Cost Transfer
 
-| Kernel Tier | `toyisa1` Baseline Cost | `toyisa2` Banked Cost | Delta (%) | `vortex_rvgpu` SIMT Cost |
+| Kernel Tier | `tritonflow1` Baseline Cost | `tritonflow2` Banked Cost | Delta (%) | `vortex_rvgpu` SIMT Cost |
 |---|:---:|:---:|:---:|:---:|
 | `t0_vecadd` | 9,217.5 cycles | 7,374.0 cycles | **-20.0%** | 6,837.5 cycles |
 | `t1_matmul` | 35,772.9 cycles | 28,402.0 cycles | **-20.6%** | 6,837.5 cycles |
@@ -150,8 +150,8 @@ tests/unit/test_vortex_capabilities.py ..................                [100%]
 ### Installation
 Clone the repository and install dependencies in editable mode:
 ```bash
-git clone https://github.com/Incharajayaram/segfault-triton-toyisa.git
-cd segfault-triton-toyisa
+git clone https://github.com/Incharajayaram/segfault-tritonflow.git
+cd segfault-tritonflow
 
 # Install core dependencies
 pip install -e .
@@ -227,7 +227,7 @@ Open in your browser:
 ### A. PyTorch `torch.compile` Backend Integration
 ```python
 import torch
-from triton_toyisa.torch_backend.compiler import toyisa_backend
+from tritonflow.torch_backend.compiler import tritonflow_backend
 
 class SimpleMLP(torch.nn.Module):
     def __init__(self):
@@ -243,32 +243,32 @@ model = SimpleMLP()
 x = torch.randn(16, 64)
 
 # Compile model targeting custom AI accelerator
-opt_model = torch.compile(model, backend="toyisa")
+opt_model = torch.compile(model, backend="tritonflow")
 output = opt_model(x)
 
 # Inspect lowering plan, node coverage, and hardware statistics
-plan = opt_model.toyisa_plan
+plan = opt_model.tritonflow_plan
 print(f"Fully lowered: {plan.fully_lowered}")
 print(f"Nodes lowered to chip: {plan.node_lowerings}")
 ```
 
-### B. Command-Line Interface (`toyisa`)
+### B. Command-Line Interface (`tritonflow`)
 Compile arbitrary TTIR fixtures directly from the terminal:
 ```bash
 # Compile fixture to Vortex RVGPU
-toyisa lower fixtures/t1_matmul.ttir --isa vortex_rvgpu
+tritonflow lower fixtures/t1_matmul.ttir --isa vortex_rvgpu
 
 # Compile and print cycle cost analysis
-toyisa cost fixtures/t0_vecadd.ttir --isa toyisa2
+tritonflow cost fixtures/t0_vecadd.ttir --isa tritonflow2
 
 # Run full diagnostics on a kernel
-toyisa diagnose fixtures/t3_modulo.ttir --isa toyisa1
+tritonflow diagnose fixtures/t3_modulo.ttir --isa tritonflow1
 ```
 
 ### C. Programmatic Python API
 ```python
-from triton_toyisa.lower import lower_fixture, lower_text
-from triton_toyisa.isa.schema import load_builtin
+from tritonflow.lower import lower_fixture, lower_text
+from tritonflow.isa.schema import load_builtin
 
 # Lower canonical fixture against Vortex RVGPU target
 ctx = lower_fixture("t1_matmul", isa_name="vortex_rvgpu")
@@ -284,7 +284,7 @@ print(f"Numerical relative error: {ctx.parity_max_rel_err:.4e}")
 ## 9. Project Structure
 
 ```
-segfault-triton-toyisa/
+segfault-tritonflow/
 ├── bench/                         # Benchmarking adapters, harnesses, and baseline results
 │   ├── adapter.py                 # Pipeline benchmark harness
 │   └── results.json               # Recorded latency, cost, and coverage metrics
@@ -293,7 +293,7 @@ segfault-triton-toyisa/
 │   └── team/                      # Ownership, tracks, and methodology guides
 ├── fixtures/                      # Canonical TTIR kernel fixtures (t0 to t3)
 ├── specs/                         # Technical specs, RFCs, and formal contracts
-├── src/triton_toyisa/             # Core Compiler Implementation
+├── src/tritonflow/             # Core Compiler Implementation
 │   ├── canon/                     # IR Canonicalization passes
 │   ├── emit/                      # Target assembly and IR emission
 │   ├── emu/                       # Native execution & hardware simulation
@@ -304,8 +304,8 @@ segfault-triton-toyisa/
 │   ├── extract/                   # Dynamic Triton extraction & FlagGems bridge
 │   ├── isa/                       # Declarative schema engine & instruction selectors
 │   │   └── schemas/               # Hardware architecture YAML definitions
-│   │       ├── toyisa1.yaml       # Streaming DMA ASIC
-│   │       ├── toyisa2.yaml       # Banked Scratchpad ASIC
+│   │       ├── tritonflow1.yaml       # Streaming DMA ASIC
+│   │       ├── tritonflow2.yaml       # Banked Scratchpad ASIC
 │   │       └── vortex_rvgpu.yaml  # Vortex RISC-V SIMT GPGPU
 │   ├── recognize/                 # Affine loop and memory access descriptor synthesis
 │   ├── report/                    # Coverage, transfer, and diagnostic generators
