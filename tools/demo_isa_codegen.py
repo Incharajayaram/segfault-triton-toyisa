@@ -43,7 +43,7 @@ def main():
     args = parser.parse_args()
 
     print(f"\n{CYAN}{BOLD}{'═'*76}{RESET}")
-    print(f"{CYAN}{BOLD}  SEGFAULT: LIVE PYTORCH → TRITON-IR → TARGET-ISA CODE GENERATION DEMO{RESET}")
+    print(f"{CYAN}{BOLD}  TRITONFLOW: LIVE PYTORCH → TRITON-IR → TARGET-ISA CODE GENERATION DEMO{RESET}")
     print(f"{CYAN}{BOLD}{'═'*76}{RESET}\n")
 
     # 1. PyTorch Input

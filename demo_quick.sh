@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick Demo for SEGFAULT - Automated 5-Stage Live Compiler Demo
+# Quick Demo for TritonFlow - Automated 5-Stage Live Compiler Demo
 # Usage: bash demo_quick.sh
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

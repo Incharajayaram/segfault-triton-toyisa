@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SEGFAULT: Schema-Driven Multi-ISA AI Accelerator Compiler
+TritonFlow: Schema-Driven Multi-ISA AI Accelerator Compiler
 Master Interactive Live Demonstration
-IICT CompilerTech Hackathon 2025
+IICT CompilerTech Hackathon 2026
 """
 
 from __future__ import annotations
@@ -247,7 +247,7 @@ def demo_5_negative_control():
 # Main Entrypoint
 # --------------------------------------------------------------------------- #
 def main():
-    parser = argparse.ArgumentParser(description="SEGFAULT Live Compiler Demonstration")
+    parser = argparse.ArgumentParser(description="TritonFlow Live Compiler Demonstration")
     parser.add_argument("--step", type=int, choices=[1, 2, 3, 4, 5], help="Run specific demo step")
     parser.add_argument("--quick", action="store_true", help="Run without interactive pauses")
     args = parser.parse_args()
@@ -255,8 +255,8 @@ def main():
     auto_mode = args.quick or (args.step is not None)
 
     print(f"\n{CYAN}{BOLD}╔════════════════════════════════════════════════════════════════════════════╗{RESET}")
-    print(f"{CYAN}{BOLD}║         SEGFAULT: SCHEMA-DRIVEN MULTI-ISA ACCELERATOR COMPILER             ║{RESET}")
-    print(f"{CYAN}{BOLD}║         IICT CompilerTech Hackathon 2025 — Official Demonstration          ║{RESET}")
+    print(f"{CYAN}{BOLD}║        TRITONFLOW: SCHEMA-DRIVEN MULTI-ISA ACCELERATOR COMPILER            ║{RESET}")
+    print(f"{CYAN}{BOLD}║         IICT CompilerTech Hackathon 2026 — Official Demonstration          ║{RESET}")
     print(f"{CYAN}{BOLD}╚════════════════════════════════════════════════════════════════════════════╝{RESET}")
 
     steps = [
