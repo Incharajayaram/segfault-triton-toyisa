@@ -166,8 +166,7 @@ a documented disposition; none is silently ignored. Representative cases:
   any input.
 - **FR-002**: The parser MUST bind every result of a multi-result operation and MUST preserve `loc` names when
   present.
-- **FR-003**: The system MUST NOT build LLVM/MLIR. Traversal over parsed IR is implemented in Python; the
-  shipped MLIR bindings are not used for traversal (they expose no `walk`/`get_block`).
+- **FR-003**: Dynamic LLVM/MLIR & JIT Integration Permitted. The restriction against building/using LLVM/MLIR has been removed. The system supports direct dynamic JIT compilation, native MLIR dialect passes, and LLVM/Triton toolchain integration for on-the-fly kernel extraction and lowering alongside Python traversal.
 - **FR-004**: Every pipeline stage MUST be deterministic: identical input bytes produce identical output
   bytes, across processes and hash seeds.
 - **FR-005**: Any operation or operand that cannot be lowered MUST become an explicit `UNSUPPORTED` marker

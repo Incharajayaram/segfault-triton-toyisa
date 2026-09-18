@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from fixtures_lib import load_golden, normalize, read_fixture, scan  # noqa: E402
+from fixtures_lib import FIXTURES, load_golden, normalize, read_fixture, scan  # noqa: E402
 
 FAILURES: list[str] = []
 ABS_PATH = re.compile(r'loc\("(/[^"]*)"')

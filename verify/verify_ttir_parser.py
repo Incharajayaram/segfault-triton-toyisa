@@ -110,7 +110,7 @@ def main() -> int:
             raw = parse_raw(text, source_path="<negative>")
             check(f"{label}: produced diagnostic or clean parse (no crash)",
                   isinstance(raw.diagnostics, list), True)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — a raise here IS the failure
             FAILURES.append(label)
             print(f"  FAIL {label}: parse_raw RAISED {type(exc).__name__}: {exc}")
 
@@ -122,7 +122,7 @@ def main() -> int:
     except RecursionError:
         FAILURES.append("deep nesting")
         print("  FAIL deep nesting: RecursionError propagated")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         check("deep nesting: refused with diagnostic, no crash", type(exc).__name__,
               type(exc).__name__)  # any non-RecursionError exception is acceptable? NO:
         FAILURES.append("deep nesting raised")
@@ -139,7 +139,7 @@ def main() -> int:
     for i, text in enumerate(adversarial):
         try:
             parse_raw(text, source_path=f"<adv{i}>")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             raised.append(f"case {i} ({text[:30]!r}): {type(exc).__name__}: {exc}")
     check("adversarial corpus: parse_raw never raises", len(raised), 0,
           "; ".join(raised[:3]))
