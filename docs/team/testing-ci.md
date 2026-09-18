@@ -97,7 +97,7 @@ makes the interface real. T-L3/T-L4 are owned by track D.
 
 Enforced by `tools/check_test_map.py`, wired as `make test-map`:
 
-1. every `src/triton_toyisa/**/<module>.py` has `tests/unit/test_<module>.py`
+1. every `src/tritonflow/**/<module>.py` has `tests/unit/test_<module>.py`
 2. every `specs/.../contracts/<name>.md` has `tests/contract/test_<name>.py`
    (`-` → `_`)
 3. no module imports `triton` outside `harness/`, and no module imports `torch`
@@ -133,8 +133,8 @@ The deadline mechanism is explicit and binary:
 ```python
 # tests/conftest.py
 def real_pipeline_available() -> tuple[bool, str]:
-    from triton_toyisa.ttir.parser import parse_raw
-    from triton_toyisa.ttir.to_ir import build_ir
+    from tritonflow.ttir.parser import parse_raw
+    from tritonflow.ttir.to_ir import build_ir
 ```
 
 * unavailable + `STRICT_REAL=0` → `xfail`, reason printed in the run summary

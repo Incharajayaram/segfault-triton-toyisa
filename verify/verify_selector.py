@@ -2,7 +2,7 @@
 """verify_selector.py — instruction selection with cost + oracle gap.
 
 Converted from tests/contract/test_selector.py. Expected values come from
-the schema's own cost formulas read as text (toyisa1.yaml: DMA1D = 1.0*words,
+the schema's own cost formulas read as text (tritonflow1.yaml: DMA1D = 1.0*words,
 DMA2D = 0.60*words, MAC8 = 4.0*tiles...), quoted in comments — NOT from
 running the selector.
 
@@ -21,9 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.isa.schema import load_builtin  # noqa: E402
-from triton_toyisa.isa.select import enumerate_candidates, select  # noqa: E402
-from triton_toyisa.recognize.descriptor import AccessDescriptor  # noqa: E402
+from tritonflow.isa.schema import load_builtin
+from tritonflow.isa.select import enumerate_candidates, select
+from tritonflow.recognize.descriptor import AccessDescriptor
 
 FAILURES: list[str] = []
 
@@ -38,7 +38,7 @@ def check(name, actual, expected, context=""):
 
 
 def main() -> int:
-    schema1 = load_builtin("toyisa1")
+    schema1 = load_builtin("tritonflow1")
 
     print("S1: 1D access, DMA2D inadmissible -> DMA1D at 1.0*64 = 64.0")
     desc = AccessDescriptor(

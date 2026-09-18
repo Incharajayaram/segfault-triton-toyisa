@@ -18,8 +18,8 @@ import sys
 
 import pytest
 
-from triton_toyisa.extract import dynamic_extract as de
-from triton_toyisa.extract import flaggems_bridge as fg
+from tritonflow.extract import dynamic_extract as de
+from tritonflow.extract import flaggems_bridge as fg
 
 
 @pytest.fixture
@@ -37,13 +37,13 @@ def without_triton(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_package_imports_without_triton(without_triton) -> None:
-    """`import triton_toyisa` must not need the compiler it can optionally drive."""
-    module = importlib.import_module("triton_toyisa")
+    """`import tritonflow` must not need the compiler it can optionally drive."""
+    module = importlib.import_module("tritonflow")
     assert module is not None
 
 
 def test_extract_package_imports_without_triton(without_triton) -> None:
-    module = importlib.import_module("triton_toyisa.extract")
+    module = importlib.import_module("tritonflow.extract")
     assert module.is_triton_available() is False
 
 

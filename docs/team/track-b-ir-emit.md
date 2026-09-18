@@ -17,16 +17,16 @@ Nobody else can do either half, which is why you are on the critical path twice.
 ## You own
 
 ```
-src/triton_toyisa/ttir/ssa.py               Module, Function, Operation, Region, Block, SsaValue, TypeExpr, Loc, Attr
-src/triton_toyisa/ttir/types.py             type text -> TypeExpr (shape, dtype, address space)
-src/triton_toyisa/ttir/to_ir.py             build_ir(RawModule) -> ParseResult
-src/triton_toyisa/ttir/graph.py             build_def_use, walk_region, topo_within_region, iter_loops
-src/triton_toyisa/canon/canonicalize.py     idempotent only
-src/triton_toyisa/emit/ir.py                Instr, Loop, Program, Operand, UnsupportedMarker
-src/triton_toyisa/emit/assemble.py          assemble, order_regions, emit_instr, check_constraint
-src/triton_toyisa/emit/disasm.py            serialize, deserialize, disassemble
-src/triton_toyisa/cli.py                    compile/report/transfer subcommands
-src/triton_toyisa/report/transfer.py        the per-stage transfer table
+src/tritonflow/ttir/ssa.py               Module, Function, Operation, Region, Block, SsaValue, TypeExpr, Loc, Attr
+src/tritonflow/ttir/types.py             type text -> TypeExpr (shape, dtype, address space)
+src/tritonflow/ttir/to_ir.py             build_ir(RawModule) -> ParseResult
+src/tritonflow/ttir/graph.py             build_def_use, walk_region, topo_within_region, iter_loops
+src/tritonflow/canon/canonicalize.py     idempotent only
+src/tritonflow/emit/ir.py                Instr, Loop, Program, Operand, UnsupportedMarker
+src/tritonflow/emit/assemble.py          assemble, order_regions, emit_instr, check_constraint
+src/tritonflow/emit/disasm.py            serialize, deserialize, disassemble
+src/tritonflow/cli.py                    compile/report/transfer subcommands
+src/tritonflow/report/transfer.py        the per-stage transfer table
 tests/unit/test_parser_semantic_negative.py your half of the negative corpus
 ```
 

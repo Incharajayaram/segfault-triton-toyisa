@@ -1,6 +1,6 @@
 """Contract tests for isa.schema using standard library unittest.
 
-Validates declarative ISA schemas (toyisa1, toyisa2), predicate logic,
+Validates declarative ISA schemas (tritonflow1, tritonflow2), predicate logic,
 cost expressions, and fail-closed admissibility.
 """
 
@@ -8,24 +8,24 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.isa.schema import (
+from tritonflow.isa.schema import (
     IsaSchema,
     cost_of,
     evaluate,
     load_builtin,
     validate_schema,
 )
-from triton_toyisa.recognize.descriptor import AccessDescriptor
-from triton_toyisa.recognize.walk import SymExpr
+from tritonflow.recognize.descriptor import AccessDescriptor
+from tritonflow.recognize.walk import SymExpr
 
 
 class TestIsaSchemaContract(unittest.TestCase):
     """Real contract tests for the declarative ISA schema specification."""
 
-    def test_load_builtin_toyisa1(self) -> None:
-        schema = load_builtin("toyisa1")
+    def test_load_builtin_tritonflow1(self) -> None:
+        schema = load_builtin("tritonflow1")
         self.assertIsInstance(schema, IsaSchema)
-        self.assertEqual(schema.name, "toyisa1")
+        self.assertEqual(schema.name, "tritonflow1")
         self.assertEqual(schema.schema_version, 1)
 
         # Invariants: must have memory spaces and instructions
@@ -33,7 +33,7 @@ class TestIsaSchemaContract(unittest.TestCase):
         self.assertEqual(schema.data_model.memory_spaces[0].name, "global")
         self.assertEqual(schema.data_model.memory_spaces[0].alignment_words, 4)
 
-        # Expected instructions in toyisa1
+        # Expected instructions in tritonflow1
         inst_names = list(schema.instructions.keys())
         for expected in ("DMA1D", "DMA2D", "MAC8", "MAC16", "EPI"):
             self.assertIn(expected, inst_names)
@@ -42,12 +42,12 @@ class TestIsaSchemaContract(unittest.TestCase):
         violations = validate_schema(schema)
         self.assertEqual(len(violations), 0, f"Schema validation violations: {violations}")
 
-    def test_load_builtin_toyisa2(self) -> None:
-        schema = load_builtin("toyisa2")
+    def test_load_builtin_tritonflow2(self) -> None:
+        schema = load_builtin("tritonflow2")
         self.assertIsInstance(schema, IsaSchema)
-        self.assertEqual(schema.name, "toyisa2")
+        self.assertEqual(schema.name, "tritonflow2")
 
-        # toyisa2 has banked scratchpad & accumulator
+        # tritonflow2 has banked scratchpad & accumulator
         spaces = {space.name: space for space in schema.data_model.memory_spaces}
         self.assertIn("global", spaces)
         self.assertIn("scratch", spaces)
@@ -58,7 +58,7 @@ class TestIsaSchemaContract(unittest.TestCase):
             self.assertIn(expected, inst_names)
 
         violations = validate_schema(schema)
-        self.assertEqual(len(violations), 0, f"toyisa2 schema violations: {violations}")
+        self.assertEqual(len(violations), 0, f"tritonflow2 schema violations: {violations}")
 
     def test_predicate_evaluation_admissibility(self) -> None:
         """Test predicate evaluation for aligned, in_bounds, and arithmetic."""
@@ -102,7 +102,7 @@ class TestIsaSchemaContract(unittest.TestCase):
         self.assertEqual(verdict, "unknown")
 
     def test_cost_evaluation(self) -> None:
-        schema = load_builtin("toyisa1")
+        schema = load_builtin("tritonflow1")
         dma1d = schema.instruction("DMA1D")
         self.assertIsNotNone(dma1d)
 

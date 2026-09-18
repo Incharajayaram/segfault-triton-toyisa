@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.emu.hardware import BankConflictUnit, CoalescingUnit  # noqa: E402
+from tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
 
 FAILURES: list[str] = []
 

@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from triton_toyisa.torch_backend.device import (
+from tritonflow.torch_backend.device import (
     DeviceError,
     OutOfStorage,
     ToyDevice,
@@ -18,9 +18,9 @@ from triton_toyisa.torch_backend.device import (
 try:
     import torch
 
-    from triton_toyisa.torch_backend.device_interface import (
+    from tritonflow.torch_backend.device_interface import (
         NotSupportedError,
-        ToyIsaInterface,
+        TritonFlowInterface,
         install,
     )
     HAS_TORCH = True
@@ -87,16 +87,16 @@ class TestTorchSeamContract(unittest.TestCase):
         if not HAS_TORCH:
             self.skipTest("torch is not installed in the environment (seam extra required)")
 
-        self.assertTrue(ToyIsaInterface.is_available())
-        self.assertEqual(ToyIsaInterface.device_count(), 1)
-        self.assertEqual(ToyIsaInterface.current_device(), 0)
+        self.assertTrue(TritonFlowInterface.is_available())
+        self.assertEqual(TritonFlowInterface.device_count(), 1)
+        self.assertEqual(TritonFlowInterface.current_device(), 0)
 
-        props = ToyIsaInterface.get_device_properties(0)
-        self.assertIn("toyisa", props.name)
+        props = TritonFlowInterface.get_device_properties(0)
+        self.assertIn("tritonflow", props.name)
 
         # Synchronous device raises on asynchronous stream operations
         with self.assertRaises(NotSupportedError):
-            ToyIsaInterface.current_stream()
+            TritonFlowInterface.current_stream()
 
 
 if __name__ == "__main__":

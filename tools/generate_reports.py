@@ -18,18 +18,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.ttir.to_ir import parse_module
-from triton_toyisa.ttir.graph import build_def_use
-from triton_toyisa.idioms.detect import annotate
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.emit.assemble import assemble
-from triton_toyisa.report.coverage import coverage_report, render_markdown
-from triton_toyisa.report.transfer import Edit, transfer_report, render_transfer_markdown
+from tritonflow.emit.assemble import assemble
+from tritonflow.idioms.detect import annotate
+from tritonflow.isa.schema import load_builtin
+from tritonflow.report.coverage import coverage_report, render_markdown
+from tritonflow.report.transfer import Edit, render_transfer_markdown, transfer_report
+from tritonflow.ttir.graph import build_def_use
+from tritonflow.ttir.to_ir import parse_module
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = ROOT / "fixtures"
 TIERS = ["t0_vecadd", "t1_matmul", "t2_matmul_relu", "t3_modulo"]
-ISAS = ["toyisa1", "toyisa2", "vortex_rvgpu"]
+ISAS = ["tritonflow1", "tritonflow2", "vortex_rvgpu"]
 
 
 def run_pipeline_for_reports():
@@ -83,12 +83,12 @@ def run_pipeline_for_reports():
     cov_path.write_text(cov_md, encoding="utf-8")
     print(f"✔ Generated: {cov_path} ({len(cov_report.tiers)} tiers)")
 
-    # 2. Generate Transfer Report (toyisa1 -> toyisa2)
-    edits_toyisa2 = [
-        Edit(path="src/triton_toyisa/isa/schemas/toyisa2.yaml", lines_changed=96, reason="Banked scratchpad target schema"),
-        Edit(path="src/triton_toyisa/isa/rules/toyisa2.py", lines_changed=48, reason="Custom lowering rules"),
+    # 2. Generate Transfer Report (tritonflow1 -> tritonflow2)
+    edits_tritonflow2 = [
+        Edit(path="src/tritonflow/isa/schemas/tritonflow2.yaml", lines_changed=96, reason="Banked scratchpad target schema"),
+        Edit(path="src/tritonflow/isa/rules/tritonflow2.py", lines_changed=48, reason="Custom lowering rules"),
     ]
-    trans_report = transfer_report(runs, edits=edits_toyisa2, baseline_isa="toyisa1", target_isa="toyisa2")
+    trans_report = transfer_report(runs, edits=edits_tritonflow2, baseline_isa="tritonflow1", target_isa="tritonflow2")
     trans_md = render_transfer_markdown(trans_report)
     trans_path = ROOT / "TRANSFER_REPORT.md"
     trans_path.write_text(trans_md, encoding="utf-8")

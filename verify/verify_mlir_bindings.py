@@ -49,16 +49,16 @@ def check(name, actual, expected, context=""):
 def main() -> int:
     try:
         import triton
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # The subject of this script is Triton's compiler. Without it there is
         # nothing to check, and saying so loudly beats a silent pass.
         print(f"  SKIPPED: triton is not importable ({type(exc).__name__}: {exc})")
         print("           install the `extract` extra to run this check")
         return 0
 
-    from triton_toyisa.extract import dynamic_extract as de
-    from triton_toyisa.ttir.to_ir import parse_module
-    from triton_toyisa.torch_backend import compiler as seam
+    from tritonflow.extract import dynamic_extract as de
+    from tritonflow.torch_backend import compiler as seam
+    from tritonflow.ttir.to_ir import parse_module
 
     # Measured, not assumed: the extraction must not touch device memory even when
     # a device is present. `memory_allocated` needs a CUDA context to answer, so
@@ -68,7 +68,7 @@ def main() -> int:
 
         cuda_present = torch.cuda.is_available()
         device_bytes_before = torch.cuda.memory_allocated() if cuda_present else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         cuda_present = False
         device_bytes_before = 0
 
@@ -119,19 +119,19 @@ def main() -> int:
     saved = de._CAPABILITY
     try:
         de._CAPABILITY = de.Capability(available=False, reason="verify: simulated absence")
-        import torch  # noqa: F401 - only the seam needs it, and only for this check
+        import torch
 
         a = torch.randn(128, 64)
         b = torch.randn(64, 128)
         graph, _ = torch._dynamo.export(
             lambda x, y: x @ y, tracing_mode="real", aten_graph=False
         )(a, b)
-        call = seam.toyisa_backend(graph, (a, b))
-        provenance = [k.provenance for k in call.toyisa_plan.lowered]
-        notes = {r.stage: r.reason for r in call.toyisa_plan.notes}
+        call = seam.tritonflow_backend(graph, (a, b))
+        provenance = [k.provenance for k in call.tritonflow_plan.lowered]
+        notes = {r.stage: r.reason for r in call.tritonflow_plan.notes}
         check("falls back to the recorded lowering", provenance, ["recorded"])
         check("still fully lowered (the recorded path answered)",
-              call.toyisa_plan.fully_lowered, True)
+              call.tritonflow_plan.fully_lowered, True)
         check("notes why extraction did not run",
               "unavailable" in notes.get("extract", ""), True, str(notes))
         result = call(a, b)

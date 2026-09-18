@@ -38,14 +38,14 @@ skip. Do not skip them.
 - **Never assert a number you have not produced.** Coverage, cost, transfer rate, latency: generated from the
   reports, never typed into prose. If it is not in `reports/`, it does not go in the write-up.
 - **Never edit someone else's module.** Interfaces are frozen in
-  `specs/001-triton-to-toy-isa/contracts/`. If you need a change, post in the group and the owner makes it.
+  `specs/001-triton-to-tritonflow/contracts/`. If you need a change, post in the group and the owner makes it.
 
 ## The split
 
 We have a **parsing specialist** and an **IR specialist**, and they are different people. That is the best
 starting position available: the front end was the one single-person bottleneck, and it becomes two halves the
 moment there is a frozen seam between them. That seam is `RawModule`
-(`specs/001-triton-to-toy-isa/contracts/raw-module.md`) — the parser's output is **text-level only**: types stay
+(`specs/001-triton-to-tritonflow/contracts/raw-module.md`) — the parser's output is **text-level only**: types stay
 strings, attributes stay unparsed, SSA names stay as written.
 
 | Track | Owner | Modules | Load | Critical path? |
@@ -74,7 +74,7 @@ integration risk to the end. Instead:
 | A | **`RawModule` dataclasses committed before lunch**, then fixtures, then the parser happy path | nothing depends on anyone, and A owns the seam everyone else needs |
 | B | `ssa.py`/`types.py` field definitions, then `build_ir` against a **hand-built `RawModule`** | the seam is frozen at lunch, so B never waits for the parser |
 | C | `AccessDescriptor` committed before lunch, then the expectation table against a **hand-built `Module`**, then the `tts.make_tptr` conformance harness | a dataclass literal is enough to write every test |
-| D | `toyisa1.yaml`, the predicate language, `validate_schema`, `select` — then the **day-1 smoke test**: hard-coded 64×64 matmul on the registered device | hand-built descriptors are the real input to the selector; the seam retires the only integration risk today |
+| D | `tritonflow1.yaml`, the predicate language, `validate_schema`, `select` — then the **day-1 smoke test**: hard-coded 64×64 matmul on the registered device | hand-built descriptors are the real input to the selector; the seam retires the only integration risk today |
 
 Frozen before lunch on day 1 — after that, changes go through the owner, and an agreement in chat is not a
 freeze (each item is **committed code with fields only, no logic**):
@@ -105,7 +105,7 @@ canonicalisation entirely → ISA-2 → Tier-2 epilogue → Tier-3 fixture.
 - **Group**: status, blockers, decisions. One thread per blocker; no side-channel design decisions.
 - **A blocker is announced within 15 minutes of being hit**, with the failing command and its output. Nobody
   sits on a blocker overnight on a 4-day project.
-- **Decisions are recorded in the repo**, in `specs/001-triton-to-toy-isa/research.md` (append a row to the
+- **Decisions are recorded in the repo**, in `specs/001-triton-to-tritonflow/research.md` (append a row to the
   decisions table) or as an issue. WhatsApp is for coordination; the repo is the source of truth. If a
   decision is not in the repo, it did not happen.
 - **Branches**: `track1-frontend`, `track2-recognition`, `track3-isa-emit`, `track4-runtime`. Merge to `main`
@@ -114,7 +114,7 @@ canonicalisation entirely → ISA-2 → Tier-2 epilogue → Tier-3 fixture.
 
 ## Reading order (and what to read for your track)
 
-Everyone, once: this file → `specs/001-triton-to-toy-isa/spec.md` (the requirements) →
+Everyone, once: this file → `specs/001-triton-to-tritonflow/spec.md` (the requirements) →
 `methodology-v2.pdf` (the method, 23 pages) → `research.md` §"Foundational truths" (10 things that are true
 about this problem).
 

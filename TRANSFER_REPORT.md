@@ -1,4 +1,4 @@
-# Cross-ISA Transfer Report: `toyisa1` → `toyisa2`
+# Cross-ISA Transfer Report: `tritonflow1` → `tritonflow2`
 
 **Generated**: 2026-09-18T07:07:35.509183  
 **Zero-Edit Status**: ⚠️ Requires External Edits
@@ -7,17 +7,17 @@
 
 | Pipeline Stage | Target ISA | Transferred | Edit Location | Notes |
 |---|---|---|---|---|
-| `frontend_parser` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `def_use_graph` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `access_descriptor` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `hardware_models` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `instruction_selector` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `code_emitter` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
-| `machine_emulator` | `toyisa2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `frontend_parser` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `def_use_graph` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `access_descriptor` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `hardware_models` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `instruction_selector` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `code_emitter` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
+| `machine_emulator` | `tritonflow2` | ✅ YES | – | Zero modifications required; schema-driven. |
 
 ## Cost Comparison vs Baseline
 
-| Tier | `toyisa1` Cost | `toyisa2` Cost | Delta (%) |
+| Tier | `tritonflow1` Cost | `tritonflow2` Cost | Delta (%) |
 |---|---|---|---|
 | `t0_vecadd` | 9217.5 | 7374.0 | -20.0% |
 | `t1_matmul` | 35772.9 | 28402.0 | -20.6% |
@@ -26,5 +26,5 @@
 
 ## Edits Outside Schemas and Rules
 
-- `src/triton_toyisa/isa/schemas/toyisa2.yaml` (96 lines): Banked scratchpad target schema
-- `src/triton_toyisa/isa/rules/toyisa2.py` (48 lines): Custom lowering rules
+- `src/tritonflow/isa/schemas/tritonflow2.yaml` (96 lines): Banked scratchpad target schema
+- `src/tritonflow/isa/rules/tritonflow2.py` (48 lines): Custom lowering rules

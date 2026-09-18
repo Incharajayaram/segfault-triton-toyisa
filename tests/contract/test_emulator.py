@@ -10,19 +10,19 @@ import unittest
 
 import numpy as np
 
-from triton_toyisa.emit.ir import (
+from tritonflow.emit.ir import (
     Instr,
     MemRef,
     Program,
     SourceRef,
     UnsupportedMarker,
 )
-from triton_toyisa.emu.exec import (
+from tritonflow.emu.exec import (
     MissingInput,
     ProgramNotExecutable,
     emulate,
 )
-from triton_toyisa.emu.precision import (
+from tritonflow.emu.precision import (
     derive_tolerance,
     tf32_truncate,
 )
@@ -78,7 +78,7 @@ class TestEmulatorContract(unittest.TestCase):
     def test_emulate_halts_on_unsupported_marker(self) -> None:
         """Program carrying UNSUPPORTED marker raises ProgramNotExecutable."""
         p = Program(
-            isa_name="toyisa1",
+            isa_name="tritonflow1",
             schema_version=1,
             kernel_name="unsupported_op",
             total_cost=0.0,
@@ -99,7 +99,7 @@ class TestEmulatorContract(unittest.TestCase):
     def test_emulate_raises_on_missing_input(self) -> None:
         """Program addressing an undeclared input raises MissingInput."""
         p = Program(
-            isa_name="toyisa1",
+            isa_name="tritonflow1",
             schema_version=1,
             kernel_name="missing_in",
             total_cost=4.0,

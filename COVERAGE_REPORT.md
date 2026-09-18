@@ -14,14 +14,14 @@
 
 | ISA | Tier | fully lowered | largest subgraph | annotated (≤) | unsupported | latency ms |
 |---|---|---|---|---|---|---|
-| toyisa1 | t0_vecadd | yes | 1.00 | 1.00 | – | 5.3 |
-| toyisa1 | t1_matmul | yes | 1.00 | 1.00 | – | 12.3 |
-| toyisa1 | t2_matmul_relu | yes | 1.00 | 1.00 | – | 13.4 |
-| toyisa1 | t3_modulo | NO | 0.99 | 1.00 | 2 (x) | 4.9 |
-| toyisa2 | t0_vecadd | yes | 1.00 | 1.00 | – | 4.5 |
-| toyisa2 | t1_matmul | yes | 1.00 | 1.00 | – | 14.3 |
-| toyisa2 | t2_matmul_relu | yes | 1.00 | 1.00 | – | 16.2 |
-| toyisa2 | t3_modulo | NO | 0.99 | 1.00 | 2 (x) | 6.3 |
+| tritonflow1 | t0_vecadd | yes | 1.00 | 1.00 | – | 5.3 |
+| tritonflow1 | t1_matmul | yes | 1.00 | 1.00 | – | 12.3 |
+| tritonflow1 | t2_matmul_relu | yes | 1.00 | 1.00 | – | 13.4 |
+| tritonflow1 | t3_modulo | NO | 0.99 | 1.00 | 2 (x) | 4.9 |
+| tritonflow2 | t0_vecadd | yes | 1.00 | 1.00 | – | 4.5 |
+| tritonflow2 | t1_matmul | yes | 1.00 | 1.00 | – | 14.3 |
+| tritonflow2 | t2_matmul_relu | yes | 1.00 | 1.00 | – | 16.2 |
+| tritonflow2 | t3_modulo | NO | 0.99 | 1.00 | 2 (x) | 6.3 |
 | vortex_rvgpu | t0_vecadd | yes | 1.00 | 1.00 | – | 5.4 |
 | vortex_rvgpu | t1_matmul | yes | 1.00 | 1.00 | – | 17.2 |
 | vortex_rvgpu | t2_matmul_relu | yes | 1.00 | 1.00 | – | 18.8 |
@@ -32,45 +32,45 @@
 
 ## Instruction Mix
 
-### toyisa1 / t0_vecadd
+### tritonflow1 / t0_vecadd
 
 - `EPI`: 15 (83.3%)
 - `DMA1D`: 3 (16.7%)
 
-### toyisa1 / t1_matmul
+### tritonflow1 / t1_matmul
 
 - `EPI`: 55 (93.2%)
 - `DMA1D`: 3 (5.1%)
 - `MAC16`: 1 (1.7%)
 
-### toyisa1 / t2_matmul_relu
+### tritonflow1 / t2_matmul_relu
 
 - `EPI`: 61 (92.4%)
 - `DMA1D`: 4 (6.1%)
 - `MAC16`: 1 (1.5%)
 
-### toyisa1 / t3_modulo
+### tritonflow1 / t3_modulo
 
 - `EPI`: 25 (100.0%)
 
-### toyisa2 / t0_vecadd
+### tritonflow2 / t0_vecadd
 
 - `VPU`: 15 (83.3%)
 - `LDG`: 3 (16.7%)
 
-### toyisa2 / t1_matmul
+### tritonflow2 / t1_matmul
 
 - `VPU`: 55 (93.2%)
 - `LDG`: 3 (5.1%)
 - `OPU32`: 1 (1.7%)
 
-### toyisa2 / t2_matmul_relu
+### tritonflow2 / t2_matmul_relu
 
 - `VPU`: 61 (92.4%)
 - `LDG`: 4 (6.1%)
 - `OPU32`: 1 (1.5%)
 
-### toyisa2 / t3_modulo
+### tritonflow2 / t3_modulo
 
 - `VPU`: 25 (100.0%)
 

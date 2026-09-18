@@ -7,14 +7,14 @@
 """
 
 import unittest
-import numpy as np
-import pytest
 
-from triton_toyisa.isa.schema import load_builtin, validate_schema
-from triton_toyisa.emit.ir import Instr, Program, AsyncOp, SsaRef, Imm, MemRef
-from triton_toyisa.emu.hardware import BankConflictModel, BankConflictUnit
-from triton_toyisa.emu.tcu import TcuEmulator, TcuPerformanceCounters
-from triton_toyisa.emu.dxa import DxaEmulator, DxaDescriptor, DxaPerformanceCounters
+import numpy as np
+
+from tritonflow.emit.ir import AsyncOp, Instr, Program
+from tritonflow.emu.dxa import DxaDescriptor, DxaEmulator
+from tritonflow.emu.hardware import BankConflictModel
+from tritonflow.emu.tcu import TcuEmulator
+from tritonflow.isa.schema import load_builtin, validate_schema
 
 
 class TestVortexSchemaCapabilities(unittest.TestCase):
@@ -267,7 +267,7 @@ class TestAsyncOpIR(unittest.TestCase):
     """Verify AsyncOp integration into Program IR."""
 
     def test_async_op_in_program(self) -> None:
-        from triton_toyisa.emit.ir import SourceRef
+        from tritonflow.emit.ir import SourceRef
         instr_launch = Instr(name="DXA_COPY_2D", source_ops=(SourceRef("tt.load", 1, 1),), cost=10.0)
         instr_wait = Instr(name="BARRIER_WAIT", source_ops=(SourceRef("vx.bar", 2, 1),), cost=4.0)
         async_op = AsyncOp(

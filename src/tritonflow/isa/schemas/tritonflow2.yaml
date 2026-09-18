@@ -1,0 +1,96 @@
+schema_version: 1
+name: tritonflow2
+description: >
+  Independent second ISA for the transfer experiment (US4, T062). Deliberately
+  a DIFFERENT machine from tritonflow1, not a renamed copy: banked scratchpad +
+  accumulator memory spaces (so `aligned(base, k)` grounds per space), a
+  strided-2D DMA that needs stride[1] free, an OPU outer-product unit priced
+  per outer product, a CLAMP elementwise op, and `k_blocked` accumulation
+  order (so the emulator's tolerance derivation must account for block-local
+  reassociation). Every constraint is fail-closed for the same reason ISA-1's
+  are: "unknown" is inadmissible, never guessed.
+
+data_model:
+  memory_spaces:
+    - name: global
+      kind: flat
+      dtype: f32
+      alignment_words: 8
+    - name: scratch
+      kind: scratchpad
+      dtype: f32
+      alignment_words: 8
+      banks: 4
+    - name: accum
+      kind: accumulator
+      dtype: f32
+      alignment_words: 8
+      banks: 2
+  tile_dims: [BM, BN, BK]
+  max_dims: 4
+
+instructions:
+  # ---- memory ------------------------------------------------------------- #
+  - name: LDG
+    kind: memory
+    rule: memory
+    addressing: {form: contiguous_1d, fields: [base, length]}
+    time: {expr: "words / 2.0", unit: word}
+    cost: {expr: "0.80 * words", unit: word}
+    constraint: "in_bounds(base, length)"
+    semantics: "scratch[0:length] = global[0:length]"
+
+  - name: LDS2D
+    kind: memory
+    rule: memory
+    addressing: {form: tiled_2d, fields: [base, sizes, strides, offsets]}
+    time: {expr: "words / 2.2", unit: word}
+    cost: {expr: "0.45 * words", unit: word}
+    # The banked scratchpad needs the column stride FREE (any single column is
+    # one bank) and both extents bank-aligned; this is the constraint ISA-1's
+    # DMA2D does not have, which is what the transfer report must surface.
+    constraint: "all_of(stride[1] == 1, size[0] % 4 == 0, size[1] % 4 == 0, in_bounds_all())"
+    semantics: "scratch[i, 0:sizes[1]] = global[offsets[0]+i*strides[0], offsets[1]:...]"
+
+  # ---- compute ------------------------------------------------------------ #
+  - name: OPU32
+    kind: compute
+    rule: mac
+    tile: {m: 32, n: 32}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: f32, reduce_dim: k, order: k_blocked}
+    time: {expr: "1.0 * m * n * k / (32*32)", unit: cycle}
+    cost: {expr: "0.55 * m * n * k / (32*32)", unit: outer_product}
+    constraint: "all_of(aligned(a_base, 8), aligned(b_base, 8), m % 32 == 0, n % 32 == 0)"
+    semantics: "acc[m,n] += sum_k a[m,k] * b[k,n]  (k in 4-wide blocks, block-local reassociation)"
+
+  - name: OPU8
+    kind: compute
+    rule: mac
+    tile: {m: 8, n: 8}
+    addressing: {form: register}
+    computation_attrs: [tile_shape, dtype, accumulate]
+    accumulate: {precision: f32, reduce_dim: k, order: k_blocked}
+    time: {expr: "1.0 * m * n * k / (8*8)", unit: cycle}
+    cost: {expr: "1.10 * m * n * k / (8*8)", unit: outer_product}
+    constraint: "all_of(aligned(a_base, 8), aligned(b_base, 8))"
+    semantics: "acc[m,n] += sum_k a[m,k] * b[k,n]  (k in 4-wide blocks, block-local reassociation)"
+
+  - name: VPU
+    kind: compute
+    rule: elementwise
+    op: [add, relu]
+    addressing: {form: elementwise, fields: [base, length]}
+    cost: {expr: "0.40 * elements", unit: element}
+    constraint: "all_of(acc_dtype == op_dtype, in_bounds(base, length))"
+    semantics: "dst[i] = op(src[i])"
+
+  - name: CLAMP
+    kind: compute
+    rule: elementwise
+    op: [clamp]
+    addressing: {form: elementwise, fields: [base, length]}
+    cost: {expr: "0.45 * elements", unit: element}
+    constraint: "all_of(acc_dtype == op_dtype, in_bounds(base, length))"
+    semantics: "dst[i] = min(max(src[i], 0), 6)  — hardswish tail; the op ISA-1 has no encoding for"

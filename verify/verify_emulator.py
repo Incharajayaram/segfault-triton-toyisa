@@ -16,7 +16,6 @@ Checks:
 """
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -25,9 +24,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.emu.exec import emulate  # noqa: E402
-from triton_toyisa.emu.precision import PrecisionPolicy  # noqa: E402
-from triton_toyisa.emit.ir import Imm, Instr, Program, SsaRef  # noqa: E402
+from tritonflow.emit.ir import Instr, Program, SsaRef
+from tritonflow.emu.exec import emulate
 
 FAILURES: list[str] = []
 
@@ -42,7 +40,7 @@ def check(name, actual, expected, context=""):
 
 
 def main() -> int:
-    from triton_toyisa.emu.precision import derive_tolerance, tf32_truncate
+    from tritonflow.emu.precision import derive_tolerance, tf32_truncate
 
     print("E1/E2: tf32 truncation (independent bit math: 10 mantissa bits kept)")
     # 1.0, 2.0, 0.5 are powers of two — tf32 must preserve them exactly
@@ -79,7 +77,7 @@ def main() -> int:
 
     print("E5: missing program input fails loud")
     prog = Program(
-        isa_name="toyisa1", schema_version=1, kernel_name="k", total_cost=1.0,
+        isa_name="tritonflow1", schema_version=1, kernel_name="k", total_cost=1.0,
         inputs=("%x",),
         instrs=(Instr(name="EPI", cost=1.0, loop=None, defs=("%r",),
                       operands={"in0": SsaRef("%x")}, source_ops=()),),
@@ -88,15 +86,15 @@ def main() -> int:
         emulate(prog, {})  # %x is declared but not supplied
         FAILURES.append("E5")
         print("  FAIL E5: missing input accepted silently")
-    except Exception as exc:  # noqa: BLE001 — the raise IS the expected behavior
+    except Exception as exc:
         check("E5: raises on missing input", isinstance(exc, Exception), True,
               f"{type(exc).__name__}: {exc}")
 
     print("E6: UNSUPPORTED marker halts execution (FR-005, postcondition 2)")
-    from triton_toyisa.emit.ir import UnsupportedMarker
+    from tritonflow.emit.ir import UnsupportedMarker
 
     prog2 = Program(
-        isa_name="toyisa1", schema_version=1, kernel_name="k2", total_cost=0.0,
+        isa_name="tritonflow1", schema_version=1, kernel_name="k2", total_cost=0.0,
         inputs=("%x",),
         instrs=(),
         unsupported=(UnsupportedMarker(
@@ -108,7 +106,7 @@ def main() -> int:
         emulate(prog2, {"%x": np.ones(4, dtype=np.float32)})
         FAILURES.append("E6")
         print("  FAIL E6: program with UNSUPPORTED marker executed anyway")
-    except Exception as exc:  # noqa: BLE001 — ProgramNotExecutable IS the expected behavior
+    except Exception as exc:
         check("E6: UNSUPPORTED halts via ProgramNotExecutable",
               type(exc).__name__, "ProgramNotExecutable",
               f"got {type(exc).__name__}: {exc}")

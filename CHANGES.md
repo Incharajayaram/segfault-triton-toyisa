@@ -6,7 +6,7 @@ re-verified after. Two findings that could not be closed are recorded in
 
 ## The headline defect: `lower.py` was not a compiler
 
-`src/triton_toyisa/lower.py` — the module `cli.py`, `bench/adapter.py`,
+`src/tritonflow/lower.py` — the module `cli.py`, `bench/adapter.py`,
 `verify/verify_end_to_end.py` and the contract tests all depend on — was a lookup
 table keyed on the fixture's *filename*:
 
@@ -26,7 +26,7 @@ Consequences, all reproduced:
   corpus's negative control — its modulo wraparound makes the memory access
   unstructured and it must be refused. `unsupported=[]` was hardcoded. A silent
   miscompile of the exact kind the project's own first principle forbids.
-* **`t1`/`t2` crashed with an uncaught traceback** on toyisa1 and toyisa2: the
+* **`t1`/`t2` crashed with an uncaught traceback** on tritonflow1 and tritonflow2: the
   table emitted a `DMA1D` carrying no memory operand, which the emulator
   correctly refused at run time.
 * Identical costs (435.2, 448.0) across three supposedly different ISAs.
@@ -51,7 +51,7 @@ undercut the correct instruction on cost.
 | `LDS` / `STS` | `rule: memory`, `0.10 * words` against LDG/STG's `0.50` | Won every global load; the emitted program read a scratchpad nothing had filled | `rule: scratch` |
 | `LDG` / `STG` | identical in every field selection reads | Min-cost broke the tie by declaration order and chose `LDG` for stores; the emulator executed a store as a load | `direction: load` / `direction: store` |
 
-`toyisa2`'s `LDG`/`LDS2D` are genuine global→scratch moves and correctly remain
+`tritonflow2`'s `LDG`/`LDS2D` are genuine global→scratch moves and correctly remain
 `rule: memory` — the contrast is noted in the schema.
 
 ## New schema-language feature: instruction direction
@@ -60,7 +60,7 @@ Adding `direction` was the only way to fix the `LDG`/`STG` tie: renaming or
 re-costing either one would just move which of the two wins.
 
 * `Instruction.direction` (`load` | `store` | `None`) and `Instruction.serves()`.
-  `None` serves both, so `toyisa1` and `toyisa2` needed no edit.
+  `None` serves both, so `tritonflow1` and `tritonflow2` needed no edit.
 * `enumerate_candidates` records a direction mismatch as a **rejection** with a
   reason, not a pre-filter — `contracts/selector.md` postcondition 1 says nothing
   is pre-filtered, and "STG is not a load" belongs in the audit trail beside the
@@ -73,7 +73,7 @@ re-costing either one would just move which of the two wins.
 
 ## Other fixes
 
-* **`cli.py` imported `triton_toyisa.emit.serialize`, which does not exist** —
+* **`cli.py` imported `tritonflow.emit.serialize`, which does not exist** —
   `--out` crashed every time. Corrected to `emit.disasm`. The CLI was rewritten:
   a refusal is now a diagnostic with exit status 1 and named reasons, not an
   uncaught emulator traceback. Successful compiles print the parity result
@@ -102,8 +102,8 @@ re-costing either one would just move which of the two wins.
 
 ```
               t0_vecadd    t1_matmul      t2_matmul_relu   t3_modulo
-toyisa1       err 0.0      3.03e-4 OK     see G2           REFUSED
-toyisa2       err 0.0      3.03e-4 OK     see G2           REFUSED
+tritonflow1       err 0.0      3.03e-4 OK     see G2           REFUSED
+tritonflow2       err 0.0      3.03e-4 OK     see G2           REFUSED
 vortex_rvgpu  lowers       lowers         lowers           REFUSED
 ```
 

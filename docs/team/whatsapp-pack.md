@@ -79,7 +79,7 @@ B: ssa.py field definitions, then build_ir against a HAND-BUILT RawModule. The s
    is frozen at lunch, so B never waits for the parser.
 C: descriptor fields committed, then the expectation table against a HAND-BUILT
    Module, then the tts.make_tptr conformance harness.
-D: toyisa1.yaml + predicate language + selector (a descriptor is a plain dataclass,
+D: tritonflow1.yaml + predicate language + selector (a descriptor is a plain dataclass,
    so the whole selector is testable today), then the day-1 SMOKE TEST: hard-coded
    64x64 matmul running on the registered device.
 
@@ -153,8 +153,8 @@ GROUND RULES THAT AREN'T OBVIOUS
 ## Message 3 — the reading list (group, attach the seven files)
 
 Attach: `docs/team/kickoff.md`, `docs/team/testing-ci.md`,
-`specs/001-triton-to-toy-isa/spec.md`, `specs/001-triton-to-toy-isa/plan.md`,
-`specs/001-triton-to-toy-isa/tasks.md`, `specs/001-triton-to-toy-isa/research.md`,
+`specs/001-triton-to-tritonflow/spec.md`, `specs/001-triton-to-tritonflow/plan.md`,
+`specs/001-triton-to-tritonflow/tasks.md`, `specs/001-triton-to-tritonflow/research.md`,
 and the `Makefile` pasted as text.
 
 ```text
@@ -224,7 +224,7 @@ Filled in, the four **first-hour** lines are:
 | **A** — parser | Commit the `RawModule` dataclass fields **before lunch**, then fixtures, then the four-fixture happy path | You *own* the seam. `tests/unit/test_parser_syntax_negative.py` is your half of the negative corpus |
 | **B** — IR + emitter | Commit `ssa.py`/`types.py` fields, then get `build_ir` green against a **hand-built `RawModule`** — the parser does not exist yet and does not need to | `RawModule` (A freezes it at lunch); `AccessDescriptor` (C) for the emitter |
 | **C** — recognition | Commit `AccessDescriptor` fields, then write the expectation table against a **hand-built `Module`**, then read triton-shared's `TTS_Op<"make_tptr">` (nine arguments, not three) | `Module`/`SsaValue` (B freezes at lunch) — build them as literals |
-| **D** — ISA + runtime | `toyisa1.yaml` + predicate language + selector, tested on hand-built descriptors — then get the **smoke test green**: a real torch op on the registered device | Nothing upstream. Hand-built descriptors *are* the real input to the selector |
+| **D** — ISA + runtime | `tritonflow1.yaml` + predicate language + selector, tested on hand-built descriptors — then get the **smoke test green**: a real torch op on the registered device | Nothing upstream. Hand-built descriptors *are* the real input to the selector |
 
 ---
 
@@ -237,7 +237,7 @@ DAY 1 CHECKLIST - post each one in the group as it lands, then we're unblocked
 [ ] B  ssa.py / types.py frozen + committed          -> unblocks C and D
 [ ] A  fixtures generated (4 .ttir + VERSIONS.txt)   -> unblocks everyone's real input
 [ ] C  AccessDescriptor frozen + committed           -> unblocks D's selector
-[ ] D  toyisa1.yaml + validate_schema passing        -> proves the decision machinery works
+[ ] D  tritonflow1.yaml + validate_schema passing        -> proves the decision machinery works
 [ ] D  SEAM SMOKE TEST GREEN: real torch op on our device
 
 End of day 1 we should be able to say, with a command that reproduces it:
@@ -265,7 +265,7 @@ before sending, or they will never be opened:
 
 ## File reference table
 
-*`specs/.../` below is shorthand for `specs/001-triton-to-toy-isa/`.*
+*`specs/.../` below is shorthand for `specs/001-triton-to-tritonflow/`.*
 
 | File | Send to | Format | Size | Purpose |
 |---|---|---|---|---|

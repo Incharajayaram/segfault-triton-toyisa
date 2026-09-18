@@ -25,10 +25,10 @@ torch = pytest.importorskip("torch")
 triton = pytest.importorskip("triton")
 tl = pytest.importorskip("triton.language")
 
-from triton_toyisa.emu.exec import UnsupportedInstruction  # noqa: E402
-from triton_toyisa.extract import flaggems_bridge as fg  # noqa: E402
-from triton_toyisa.extract import dynamic_extract as de  # noqa: E402
-from triton_toyisa.torch_backend import compiler as seam  # noqa: E402
+from tritonflow.emu.exec import UnsupportedInstruction
+from tritonflow.extract import dynamic_extract as de
+from tritonflow.extract import flaggems_bridge as fg
+from tritonflow.torch_backend import compiler as seam
 
 ADD_BAND = 1e-6
 
@@ -176,8 +176,8 @@ def test_seam_prefers_path_one_when_both_have_the_kernel(stub_flaggems) -> None:
     graph, _ = torch._dynamo.export(
         lambda a, b: a + b, tracing_mode="real", aten_graph=False
     )(x, y)
-    call = seam.toyisa_backend(graph, (x, y))
-    assert [kernel.provenance for kernel in call.toyisa_plan.lowered] == ["dynamic"]
+    call = seam.tritonflow_backend(graph, (x, y))
+    assert [kernel.provenance for kernel in call.tritonflow_plan.lowered] == ["dynamic"]
 
 
 def test_bridge_covers_an_op_the_extractor_does_not(stub_flaggems) -> None:
@@ -191,11 +191,11 @@ def test_bridge_covers_an_op_the_extractor_does_not(stub_flaggems) -> None:
     graph, _ = torch._dynamo.export(
         lambda a, b: torch.maximum(a, b), tracing_mode="real", aten_graph=False
     )(x, y)
-    call = seam.toyisa_backend(graph, (x, y))
+    call = seam.tritonflow_backend(graph, (x, y))
     result = call(x, y)
     if isinstance(result, (list, tuple)):
         result = result[0]
-    assert [kernel.provenance for kernel in call.toyisa_plan.lowered] == ["flaggems"]
+    assert [kernel.provenance for kernel in call.tritonflow_plan.lowered] == ["flaggems"]
     assert float((result - torch.maximum(x, y)).abs().max()) == 0.0
 
 
@@ -209,7 +209,7 @@ def test_a_bridged_op_the_machine_cannot_execute_falls_back_with_a_record(
     has no case for `math.exp`. The seam must record that as an execution refusal
     and run the graph in PyTorch — not raise at the caller and not claim success.
     """
-    from triton_toyisa.extract import flaggems_bridge as bridge
+    from tritonflow.extract import flaggems_bridge as bridge
 
     extracted = bridge.extract_for_op("sigmoid", [(8, 8)])
     assert extracted is not None
@@ -224,13 +224,13 @@ def test_a_bridged_op_the_machine_cannot_execute_falls_back_with_a_record(
     graph, _ = torch._dynamo.export(
         lambda t: torch.sigmoid(t), tracing_mode="real", aten_graph=False
     )(x)
-    call = seam.toyisa_backend(graph, (x,))
+    call = seam.tritonflow_backend(graph, (x,))
     result = call(x)
     if isinstance(result, (list, tuple)):
         result = result[0]
-    assert call.toyisa_plan.lowered == []
-    assert call.toyisa_plan.fully_lowered is False
-    stages = {r.stage: r.reason for r in call.toyisa_plan.fallbacks}
+    assert call.tritonflow_plan.lowered == []
+    assert call.tritonflow_plan.fully_lowered is False
+    stages = {r.stage: r.reason for r in call.tritonflow_plan.fallbacks}
     assert "emulator cannot execute" in stages["execute"]
     assert float((result - torch.sigmoid(x)).abs().max()) <= 1e-6
 
@@ -246,10 +246,10 @@ def test_bridge_absence_is_recorded_by_the_seam(monkeypatch: pytest.MonkeyPatch)
         graph, _ = torch._dynamo.export(
             lambda t: torch.sigmoid(t), tracing_mode="real", aten_graph=False
         )(x)
-        call = seam.toyisa_backend(graph, (x,))
-        stages = {record.stage for record in call.toyisa_plan.fallbacks}
+        call = seam.tritonflow_backend(graph, (x,))
+        stages = {record.stage for record in call.tritonflow_plan.fallbacks}
         assert {"extract", "flaggems"} <= stages
-        assert call.toyisa_plan.fully_lowered is False
+        assert call.tritonflow_plan.fully_lowered is False
     finally:
         fg._CAPABILITY = saved
         de._CAPABILITY = None

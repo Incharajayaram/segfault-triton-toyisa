@@ -8,17 +8,17 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.isa.select import select
-from triton_toyisa.recognize.descriptor import AccessDescriptor
+from tritonflow.isa.schema import load_builtin
+from tritonflow.isa.select import select
+from tritonflow.recognize.descriptor import AccessDescriptor
 
 
 class TestSelectorContract(unittest.TestCase):
     """Real contract tests for instruction selection."""
 
     def setUp(self) -> None:
-        self.schema1 = load_builtin("toyisa1")
-        self.schema2 = load_builtin("toyisa2")
+        self.schema1 = load_builtin("tritonflow1")
+        self.schema2 = load_builtin("tritonflow2")
 
     def test_dma1d_chosen_when_dma2d_inadmissible(self) -> None:
         """1D access where 2D is inadmissible: DMA1D chosen, DMA2D rejected with reason."""
@@ -95,7 +95,7 @@ class TestSelectorContract(unittest.TestCase):
             loop_carried=False,
             increment=None,
         )
-        # OPU instructions in toyisa2 require alignment 8
+        # OPU instructions in tritonflow2 require alignment 8
         report = select(self.schema2, "mac", desc, tile=(7, 7, 7), env={"a_base": 3, "b_base": 3})
         self.assertTrue(report.no_admissible_lowering)
         self.assertIsNone(report.chosen)
