@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """demo_isa_codegen.py — Live Demonstration of PyTorch → Triton-IR → Target-ISA Code Generation.
 
-Shows how torch.compile(..., backend="toyisa") transforms standard PyTorch operations
-into custom accelerator assembly across multiple ISAs (toyisa1, toyisa2, vortex_rvgpu).
+Shows how torch.compile(..., backend="tritonflow") transforms standard PyTorch operations
+into custom accelerator assembly across multiple ISAs (tritonflow1, tritonflow2, vortex_rvgpu).
 """
 
 from __future__ import annotations
@@ -16,14 +16,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import torch
 import torch._dynamo
-from triton_toyisa.torch_backend.compiler import toyisa_backend
-from triton_toyisa.emit.disasm import disassemble
-from triton_toyisa.extract.dynamic_extract import extract_matmul, is_triton_available
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.ttir.to_ir import parse_module
-from triton_toyisa.ttir.graph import build_def_use
-from triton_toyisa.idioms.detect import annotate
-from triton_toyisa.emit.assemble import assemble
+
+from triton_tritonflow.emit.assemble import assemble
+from triton_tritonflow.extract.dynamic_extract import extract_matmul
+from triton_tritonflow.idioms.detect import annotate
+from triton_tritonflow.isa.schema import load_builtin
+from triton_tritonflow.torch_backend.compiler import tritonflow_backend
+from triton_tritonflow.ttir.graph import build_def_use
+from triton_tritonflow.ttir.to_ir import parse_module
 
 # ANSI Colors
 CYAN = "\033[96m"
@@ -73,8 +73,8 @@ def main():
     ann = annotate(res.module, graph)
 
     isas = [
-        ("toyisa1", "Scratchpad ASIC (DMA1D + MAC16 + EPI)"),
-        ("toyisa2", "Banked Scratchpad Target (LDG + OPU32 + VPU)"),
+        ("tritonflow1", "Scratchpad ASIC (DMA1D + MAC16 + EPI)"),
+        ("tritonflow2", "Banked Scratchpad Target (LDG + OPU32 + VPU)"),
         ("vortex_rvgpu", "RISC-V SIMT GPGPU (LDG + TCU_MMA16 + VADD + BARRIER)"),
     ]
 
@@ -99,7 +99,7 @@ def main():
 
     holder = []
     def capture_backend(gm, example_inputs):
-        fn = toyisa_backend(gm, example_inputs)
+        fn = tritonflow_backend(gm, example_inputs)
         holder.append(fn)
         return fn
 
@@ -107,7 +107,7 @@ def main():
     toy_out = opt_fn(a, b)
 
     diff = torch.max(torch.abs(toy_out - ref_out)).item()
-    print(f"  ✔ torch.compile(backend='toyisa') Executed Successfully!")
+    print("  ✔ torch.compile(backend='tritonflow') Executed Successfully!")
     print(f"  ✔ Emulated Device Output Shape: {tuple(toy_out.shape)}")
     print(f"  ✔ Max Absolute Parity Error vs PyTorch Eager: {GREEN}{diff:.6e}{RESET}")
     print(f"  ✔ Numerical Parity: {GREEN}{BOLD}PASS (Bit-Accurate / Within TF32 Tolerance){RESET}\n")

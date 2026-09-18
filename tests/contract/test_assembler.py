@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.emit.disasm import deserialize, disassemble, serialize
-from triton_toyisa.emit.ir import (
+from triton_tritonflow.emit.disasm import deserialize, disassemble, serialize
+from triton_tritonflow.emit.ir import (
     Imm,
     Instr,
     Loop,
@@ -26,7 +26,7 @@ class TestAssemblerContract(unittest.TestCase):
     def test_basic_program_round_trip(self) -> None:
         """Test serialize -> deserialize round trip for straight-line instructions."""
         p = Program(
-            isa_name="toyisa1",
+            isa_name="tritonflow1",
             schema_version=1,
             kernel_name="test_vecadd",
             total_cost=64.0,
@@ -93,7 +93,7 @@ class TestAssemblerContract(unittest.TestCase):
         )
 
         p = Program(
-            isa_name="toyisa1",
+            isa_name="tritonflow1",
             schema_version=1,
             kernel_name="matmul_loop",
             total_cost=96.0,
@@ -112,7 +112,7 @@ class TestAssemblerContract(unittest.TestCase):
     def test_disassembly_readable_format(self) -> None:
         """Test disassembly produces structured, annotated text."""
         p = Program(
-            isa_name="toyisa1",
+            isa_name="tritonflow1",
             schema_version=1,
             kernel_name="test_disasm",
             total_cost=10.0,
@@ -131,7 +131,7 @@ class TestAssemblerContract(unittest.TestCase):
             ),
         )
         dis = disassemble(p)
-        self.assertIn("toyisa1", dis)
+        self.assertIn("tritonflow1", dis)
         self.assertIn("DMA1D", dis)
         self.assertIn("load_x", dis)
 

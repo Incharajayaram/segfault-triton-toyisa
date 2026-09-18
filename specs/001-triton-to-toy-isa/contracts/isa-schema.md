@@ -1,6 +1,6 @@
 # Contract: ISA schema and constraint evaluator
 
-**Module**: `src/triton_toyisa/isa/schema.py`
+**Module**: `src/triton_tritonflow/isa/schema.py`
 **Consumers**: the selector, the assembler's validation step, the transfer report.
 **Requirements**: FR-013 … FR-016, FR-017 (fail-closed half).
 

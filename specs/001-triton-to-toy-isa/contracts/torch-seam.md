@@ -1,6 +1,6 @@
 # Contract: PyTorch seam
 
-**Module**: `src/triton_toyisa/torch_backend/` (`compiler.py`, `device_interface.py`, `device.py`)
+**Module**: `src/triton_tritonflow/torch_backend/` (`compiler.py`, `device_interface.py`, `device.py`)
 **Consumers**: `torch.compile`, PyTorch's device machinery. **Requirements**: FR-023 … FR-026, SC-001.
 **Reference pattern** (structure, not content): `test/cpp_extensions/open_registration_extension/torch_openreg/torch_openreg/compiler.py`.
 
@@ -11,12 +11,12 @@
 from torch._dynamo.backends.registry import register_backend
 
 @register_backend
-def toyisa_backend(gm, example_inputs) -> Callable: ...
+def tritonflow_backend(gm, example_inputs) -> Callable: ...
 
 # device_interface.py
 from torch._dynamo.device_interface import DeviceInterface, register_interface_for_device
 
-@register_interface_for_device("toyisa")
+@register_interface_for_device("tritonflow")
 class ToyIsaInterface(DeviceInterface):
     # device slots: current_device, set_device, device_count, is_available, stream,
     #               current_stream, set_stream, synchronize, get_device_properties, ...
@@ -44,10 +44,10 @@ work are a contract violation.
 ## Postconditions
 
 1. **Day-1 smoke test (FR-026).** With a hard-coded lowering for one kernel, a real `torch` operation compiles
-   through `toyisa_backend` and produces a correct result. This exists before the general pipeline is wired to
+   through `tritonflow_backend` and produces a correct result. This exists before the general pipeline is wired to
    the seam, so the integration risk is retired on day 1 rather than day 6.
 2. **The registered device is visible (SC-001).** `device_count() >= 1`, `is_available()` is `True`,
-   `current_device()`/`set_device()` round-trip, and `torch.tensor(...).to("toyisa")` succeeds.
+   `current_device()`/`set_device()` round-trip, and `torch.tensor(...).to("tritonflow")` succeeds.
 3. **Real lowering path.** Once wired, the backend consumes the `ttir` that Dynamo/Inductor produced, runs the
    pipeline, and executes the emitted program on the emulator. The emulator is the *device emulator* behind the
    seam — the role `libopenreg.so` plays — not a substitute for the seam.

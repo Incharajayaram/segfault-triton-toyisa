@@ -16,7 +16,7 @@ included and are written **before** the implementation they cover.
 
 ## Path Conventions
 
-Single project. Source: `src/triton_toyisa/`. Tests: `tests/`. Specs: `specs/001-triton-to-toy-isa/`.
+Single project. Source: `src/triton_tritonflow/`. Tests: `tests/`. Specs: `specs/001-triton-to-toy-isa/`.
 
 ---
 
@@ -41,10 +41,10 @@ stage.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the package skeleton (`src/triton_toyisa/{ttir,canon,recognize,idioms,isa,emit,emu,torch_backend,report,harness}/__init__.py`) with an `__init__.py` that imports nothing heavy
+- [ ] T001 Create the package skeleton (`src/triton_tritonflow/{ttir,canon,recognize,idioms,isa,emit,emu,torch_backend,report,harness}/__init__.py`) with an `__init__.py` that imports nothing heavy
 - [ ] T002 [P] Add `pyproject.toml` with runtime deps `pyyaml`, `numpy` and dev deps `pytest`, `triton==3.7.1`, `torch==2.12.1`; pin the versions in `fixtures/VERSIONS.txt` format
 - [ ] T003 [P] Add `tests/` skeleton (`unit/`, `contract/`, `integration/`) and `pytest.ini` with `testpaths`
-- [ ] T004 [P] Add a runtime-import guard test in `tests/unit/test_no_triton_runtime.py` asserting `import triton_toyisa` succeeds with Triton absent from `sys.modules`
+- [ ] T004 [P] Add a runtime-import guard test in `tests/unit/test_no_triton_runtime.py` asserting `import triton_tritonflow` succeeds with Triton absent from `sys.modules`
 - [ ] T005 [P] Record the pinned environment in `fixtures/VERSIONS.txt` (triton version, commit hash, torch version, date) — done in T-P0-3; keep it updated on any regeneration
 
 ## Phase 2: Foundational (blocking prerequisites)
@@ -59,7 +59,7 @@ stage.
 - [ ] T011 Implement `emu/exec.py:emulate`/`apply` over `emit/ir.py` structures, including `ProgramNotExecutable` (EC-087)
 - [ ] T012 Implement `torch_backend/device.py` (`ToyDevice`, `DevicePtr`, allocate/copy/synchronize)
 - [ ] T013 Implement `torch_backend/device_interface.py` (`ToyIsaInterface`, `register_interface`) with the slot inventory recorded in `tests/contract/test_device_interface.py`
-- [ ] T014 Implement `torch_backend/compiler.py:register`/`toyisa_backend` with a **hard-coded** 64×64 matmul lowering (the smoke path)
+- [ ] T014 Implement `torch_backend/compiler.py:register`/`tritonflow_backend` with a **hard-coded** 64×64 matmul lowering (the smoke path)
 - [ ] T015 Write `tests/integration/test_torch_seam.py::test_smoke_hardcoded_matmul` — the day-1 gate: a real `torch` op compiles and runs through the registered device (SC-001, FR-026)
 
 **Checkpoint**: the seam works with a hard-coded lowering. Every later block fills in real work behind a
@@ -85,7 +85,7 @@ unlowerable op (fallback), all comparing against eager within the derived tolera
 - [ ] T020 [US1] Implement `compiler.lower_and_run` wiring pipeline → emulator → `torch.Tensor` outputs
 - [ ] T021 [US1] Implement `compiler.fallback` returning an eager callable plus a `FallbackRecord`
 - [ ] T022 [US1] Implement the fallback records surfacing in `report/coverage.py` (consumed by US5)
-- [ ] T023 [US1] `tests/contract/test_device_interface.py`: device visible (`device_count`, `is_available`, `current_device`/`set_device` round-trip), `.to("toyisa")` (EC-094, EC-095)
+- [ ] T023 [US1] `tests/contract/test_device_interface.py`: device visible (`device_count`, `is_available`, `current_device`/`set_device` round-trip), `.to("tritonflow")` (EC-094, EC-095)
 - [ ] T024 [US1] Assert unimplemented `Stream`/`Event` slots raise `NotImplementedError` with a reason, and that each reason is listed in the limitations document (EC-099)
 
 **Checkpoint**: US1 is demonstrable on its own: a real `torch.compile` matmul runs on a generated device.
@@ -145,12 +145,12 @@ end-to-end test can now use the real front end (T019–T021 unblock).
 
 ### Implementation
 
-- [ ] T052 [US3] `isa/schemas/toyisa1.yaml` — the five instructions of `data-model.md` §1.1
+- [ ] T052 [US3] `isa/schemas/tritonflow1.yaml` — the five instructions of `data-model.md` §1.1
 - [ ] T053 [US3] `isa/schema.py`: `IsaSchema`, `Instruction`, `load_schema`, `validate_schema`, `SchemaError`
 - [ ] T054 [US3] `isa/schema.py`: `evaluate` (fail-closed) and `cost_of` (zero-dimension guard)
 - [ ] T055 [US3] `isa/select.py`: `Candidate`, `SelectionReport`, `enumerate_candidates`, `select`
 - [ ] T056 [US3] `isa/select.py`: `oracle_min` (exhaustive) and the gap computation
-- [ ] T057 [US3] `isa/rules/toyisa1.py`: `ISA_RULES` for DMA/MAC/EPI
+- [ ] T057 [US3] `isa/rules/tritonflow1.py`: `ISA_RULES` for DMA/MAC/EPI
 - [ ] T058 [US3] `emit/assemble.py`: `order_regions` (region-aware), `emit_instr`, `check_constraint`
 - [ ] T059 [US3] `emit/disasm.py`: `serialize`, `deserialize`, `disassemble` + `tests/unit/test_serialize.py::test_roundtrip`
 
@@ -170,8 +170,8 @@ end-to-end test can now use the real front end (T019–T021 unblock).
 
 ### Implementation
 
-- [ ] T062 [US4] `isa/schemas/toyisa2.yaml` — scratchpad + accumulator banks, `OPU`/`CONV`, strided 2-D DMA, `CLAMP`, `k_blocked(4)` order
-- [ ] T063 [US4] `isa/rules/toyisa2.py` — authored without reading `isa/rules/toyisa1.py` (record the fact in the commit message)
+- [ ] T062 [US4] `isa/schemas/tritonflow2.yaml` — scratchpad + accumulator banks, `OPU`/`CONV`, strided 2-D DMA, `CLAMP`, `k_blocked(4)` order
+- [ ] T063 [US4] `isa/rules/tritonflow2.py` — authored without reading `isa/rules/tritonflow1.py` (record the fact in the commit message)
 - [ ] T064 [US4] `report/transfer.py`: `PIPELINE_STAGES`, `transfer_report`, `diff_edits` (git-diff based), `render_markdown`
 - [ ] T065 [US4] Produce the transfer report for ISA-2 and record every edit outside `isa/schemas/` and `isa/rules/` — including an empty list only with a stage-by-stage justification
 - [ ] T066 [US4] Resolve the open item from `research.md`: re-express the four kernels in ISA-2 (default) plus one new kernel if budget allows
@@ -231,8 +231,8 @@ end-to-end test can now use the real front end (T019–T021 unblock).
 - All of Phase 1 after T001.
 - T025–T033 (US2 tests) in parallel; T047–T051 (US3 tests) in parallel; T060–T061 in parallel.
 - T073–T078 (Phase 8) are independent files and can run together.
-- `isa/schemas/toyisa2.yaml` (T062) must be authored before `isa/rules/toyisa2.py` (T063), and deliberately
-  without reading `isa/rules/toyisa1.py` — that ordering is part of the experiment's validity, not a
+- `isa/schemas/tritonflow2.yaml` (T062) must be authored before `isa/rules/tritonflow2.py` (T063), and deliberately
+  without reading `isa/rules/tritonflow1.py` — that ordering is part of the experiment's validity, not a
   convenience.
 
 ## Implementation Strategy
@@ -259,7 +259,7 @@ CHK018; it is generated by reading the task descriptions, and it is re-read when
 |---|---|
 | FR-001 total parse with a diagnostic | T019, T028, T034, T037, T073 |
 | FR-002 multi-result binding, `loc` preservation | T025, T026, T035, T036, T037 |
-| FR-003 dynamic LLVM/MLIR & JIT integration enabled | `src/triton_toyisa/extract/dynamic_extract.py`, `src/triton_toyisa/extract/flaggems_bridge.py`, `tests/unit/test_no_triton_runtime.py` (T004), `verify/verify_mlir_bindings.py` |
+| FR-003 dynamic LLVM/MLIR & JIT integration enabled | `src/triton_tritonflow/extract/dynamic_extract.py`, `src/triton_tritonflow/extract/flaggems_bridge.py`, `tests/unit/test_no_triton_runtime.py` (T004), `verify/verify_mlir_bindings.py` |
 | FR-004 determinism | T018, T028, T074 |
 | FR-005 explicit `UNSUPPORTED`, never dropped | T010, T046, T058, T073 |
 | FR-006 loop-carried operands resolve | T029, T033, T041 |

@@ -15,9 +15,9 @@ without touching the same file.
 ## You own
 
 ```
-src/triton_toyisa/ttir/lexer.py                    tokenize, strip_comments
-src/triton_toyisa/ttir/parser.py                   parse_raw -> RawModule
-src/triton_toyisa/harness/extract_fixtures.py      extract, TIER_KERNELS
+src/triton_tritonflow/ttir/lexer.py                    tokenize, strip_comments
+src/triton_tritonflow/ttir/parser.py                   parse_raw -> RawModule
+src/triton_tritonflow/harness/extract_fixtures.py      extract, TIER_KERNELS
 fixtures/*                                         (generated once, then immutable)
 tests/unit/test_parser_syntax_negative.py          your half of the negative corpus
 ```
@@ -34,7 +34,7 @@ definition of done, item by item.
 2. **Fixtures, first thing.** You own `harness/extract_fixtures.py` and `fixtures/` because you need them more
    than anyone:
    ```
-   python -m triton_toyisa.cli extract --out fixtures --force
+   python -m triton_tritonflow.cli extract --out fixtures --force
    ```
    Expect 160 lines of `ttir` for matmul, 51 for vector-add, 67 for modulo, no GPU, no driver. Post
    "fixtures ready". 8 of the 27 lines of `inputPrecision = tf32` correctness in this project start here.

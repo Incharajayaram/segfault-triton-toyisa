@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from triton_toyisa.ttir.parser import parse_raw  # noqa: E402
-from triton_toyisa.ttir.ssa import SsaValue  # noqa: E402
-from triton_toyisa.ttir.to_ir import build_ir  # noqa: E402
+from triton_tritonflow.ttir.parser import parse_raw
+from triton_tritonflow.ttir.ssa import SsaValue
+from triton_tritonflow.ttir.to_ir import build_ir
 
 FAILURES: list[str] = []
 

@@ -11,12 +11,12 @@ anyone believes the rest.
 ## You own
 
 ```
-src/triton_toyisa/recognize/descriptor.py   AccessDescriptor, describe, descriptor_key, conformance_check
-src/triton_toyisa/recognize/op_shapes.py    OP_SHAPES, is_memory_op, is_index_op
-src/triton_toyisa/recognize/walk.py         BoundedWalker, resolve_operand, substitute_iter_arg, fold_constant
-src/triton_toyisa/idioms/patterns.py        MAC_REQUIRED, EPILOGUE_REQUIRED, MatchResult
-src/triton_toyisa/idioms/detect.py          detect_mac, detect_epilogue, detect_all, annotate
-src/triton_toyisa/report/coverage.py        fully_lowered, largest_lowered_subgraph, coverage_report, render_markdown
+src/triton_tritonflow/recognize/descriptor.py   AccessDescriptor, describe, descriptor_key, conformance_check
+src/triton_tritonflow/recognize/op_shapes.py    OP_SHAPES, is_memory_op, is_index_op
+src/triton_tritonflow/recognize/walk.py         BoundedWalker, resolve_operand, substitute_iter_arg, fold_constant
+src/triton_tritonflow/idioms/patterns.py        MAC_REQUIRED, EPILOGUE_REQUIRED, MatchResult
+src/triton_tritonflow/idioms/detect.py          detect_mac, detect_epilogue, detect_all, annotate
+src/triton_tritonflow/report/coverage.py        fully_lowered, largest_lowered_subgraph, coverage_report, render_markdown
 ```
 
 **Your contracts**: `contracts/access-descriptor.md` (the "expected results on the corpus" table is your

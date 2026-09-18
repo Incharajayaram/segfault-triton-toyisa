@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.ttir.parser import RawLoc, RawModule, RawOp
-from triton_toyisa.ttir.ssa import Module, SsaValue
-from triton_toyisa.ttir.to_ir import build_ir
+from triton_tritonflow.ttir.parser import RawLoc, RawModule, RawOp
+from triton_tritonflow.ttir.ssa import Module, SsaValue
+from triton_tritonflow.ttir.to_ir import build_ir
 
 
 class TestToIrContract(unittest.TestCase):

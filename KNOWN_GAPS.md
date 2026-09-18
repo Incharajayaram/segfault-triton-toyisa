@@ -24,7 +24,7 @@ in the audit trail beside the cost-based ones rather than being pre-filtered),
 and `assemble._direction` derives the direction from the operation name —
 `tt.load` reads through its pointer operand, `tt.store` writes through its own,
 and nothing in the descriptor carries that. An instruction that declares no
-direction serves both, so `toyisa1` and `toyisa2` needed no edit.
+direction serves both, so `tritonflow1` and `tritonflow2` needed no edit.
 
 Verified: `t0_vecadd` on `vortex_rvgpu` now emits `LDG` for both loads and `STG`
 (roles `dst`/`value`, no `defs`) for the store.
@@ -40,7 +40,7 @@ emulator then executes each as an addition, `%x_4` comes back a scalar instead o
 a 1024-element pointer vector, and the following `LDG` fails to reshape size 1
 into `(1024,)`.
 
-`toyisa1` and `toyisa2` avoid this by having a single catch-all elementwise
+`tritonflow1` and `tritonflow2` avoid this by having a single catch-all elementwise
 instruction (`EPI`, `VPU`) whose behaviour the emulator takes from the
 instruction's `source_ops` provenance. That is the "EPI overloading" the project
 documentation lists as an abstraction leak — but it is what makes those two ISAs
@@ -66,7 +66,7 @@ Reproduce:
 
 ```bash
 PYTHONPATH=src python3 -c "
-from triton_toyisa.lower import lower_fixture
+from triton_tritonflow.lower import lower_fixture
 c = lower_fixture('t0_vecadd', isa_name='vortex_rvgpu')
 print('lowered:', c.fully_lowered, '| execution_error:', c.execution_error)"
 ```
@@ -75,7 +75,7 @@ print('lowered:', c.fully_lowered, '| execution_error:', c.execution_error)"
 
 **Status:** open, quantified.
 
-`t2_matmul_relu` lowers cleanly on `toyisa1` and `toyisa2` and its output is
+`t2_matmul_relu` lowers cleanly on `tritonflow1` and `tritonflow2` and its output is
 correctly non-negative (`TestReluEpilogue` asserts this), but its maximum
 relative error against the fp64 reference is **1.0575** against a derived
 tolerance of **0.0625**.
@@ -94,8 +94,8 @@ Reproduce:
 
 ```bash
 PYTHONPATH=src python3 -c "
-from triton_toyisa.lower import lower_fixture
-c = lower_fixture('t2_matmul_relu', isa_name='toyisa1')
+from triton_tritonflow.lower import lower_fixture
+c = lower_fixture('t2_matmul_relu', isa_name='tritonflow1')
 print(f'err={c.parity_max_rel_err:.6g} tol={c.tolerance:.6g}')"
 ```
 
@@ -118,7 +118,7 @@ the test suite is CPU-only and reproducible offline.
 
 **Status:** sources shipped, never built, never called.
 
-`src/triton_toyisa/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
+`src/triton_tritonflow/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
 `precision.h`, `ir_types.h`, `errors.h`) and a top-level `CMakeLists.txt` are in
 the tree. Nothing builds them and, until this merge, nothing could have used
 them:

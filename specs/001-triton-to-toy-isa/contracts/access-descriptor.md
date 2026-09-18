@@ -1,6 +1,6 @@
 # Contract: structured-access recogniser
 
-**Module**: `src/triton_toyisa/recognize/` (`descriptor.py`, `op_shapes.py`, `walk.py`)
+**Module**: `src/triton_tritonflow/recognize/` (`descriptor.py`, `op_shapes.py`, `walk.py`)
 **Consumers**: idiom detection, selection, emission. **Requirements**: FR-006 … FR-009, FR-012.
 
 ## Interface

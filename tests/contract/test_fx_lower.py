@@ -19,13 +19,13 @@ except ImportError:  # pragma: no cover - torch is an optional extra
     HAS_TORCH = False
 
 if HAS_TORCH:
-    from triton_toyisa.torch_backend.fx_lower import (
+    from triton_tritonflow.torch_backend.fx_lower import (
         lower_fx_graph,
         supported_targets,
         try_lower_and_run,
     )
 
-ISAS = ("toyisa1", "toyisa2", "vortex_rvgpu")
+ISAS = ("tritonflow1", "tritonflow2", "vortex_rvgpu")
 
 
 @unittest.skipUnless(HAS_TORCH, "torch is not installed")
@@ -53,7 +53,7 @@ class TestFxLowering(unittest.TestCase):
             return torch.mm(a, b)
 
         gm, xs = self._trace(fn, (16, 16))
-        result, lowering = try_lower_and_run(gm, xs, xs, isa_name="toyisa1")
+        result, lowering = try_lower_and_run(gm, xs, xs, isa_name="tritonflow1")
         self.assertIsNotNone(result)
         self.assertIn("MAC", " ".join(i.name for i in lowering.program.instructions()))
         self.assertLess(float(abs(result - fn(*xs).numpy()).max()), 1e-4)
@@ -105,19 +105,19 @@ class TestFxLowering(unittest.TestCase):
 
         gm, xs = self._trace(fn)
         reasons: list[str] = []
-        self.assertIsNone(lower_fx_graph(gm, xs, isa_name="toyisa1", report=reasons))
+        self.assertIsNone(lower_fx_graph(gm, xs, isa_name="tritonflow1", report=reasons))
         self.assertTrue(reasons)
         self.assertIn("sigmoid", reasons[0])
 
     def test_op_the_isa_does_not_declare_refuses(self) -> None:
-        """toyisa1's EPI declares `op: [add, relu]`, so a multiply has no lowering."""
+        """tritonflow1's EPI declares `op: [add, relu]`, so a multiply has no lowering."""
 
         def fn(a, b):
             return a * b
 
         gm, xs = self._trace(fn)
         reasons: list[str] = []
-        self.assertIsNone(lower_fx_graph(gm, xs, isa_name="toyisa1", report=reasons))
+        self.assertIsNone(lower_fx_graph(gm, xs, isa_name="tritonflow1", report=reasons))
         self.assertIn("no admissible", reasons[0])
 
     def test_supported_targets_is_declared(self) -> None:
@@ -128,31 +128,31 @@ class TestFxLowering(unittest.TestCase):
 @unittest.skipUnless(HAS_TORCH, "torch is not installed")
 class TestBackendIntegration(unittest.TestCase):
     def test_torch_compile_uses_the_fx_path(self) -> None:
-        from triton_toyisa.torch_backend.compiler import toyisa_backend
+        from triton_tritonflow.torch_backend.compiler import tritonflow_backend
 
         def fn(a, b):
             return torch.relu(a + b)
 
         gm = symbolic_trace(fn)
         xs = [torch.randn(8, 8), torch.randn(8, 8)]
-        run = toyisa_backend(gm, xs)
-        self.assertTrue(hasattr(run, "toyisa_fx"), "the FX path was not taken")
+        run = tritonflow_backend(gm, xs)
+        self.assertTrue(hasattr(run, "tritonflow_fx"), "the FX path was not taken")
         out = run(*xs)
         out = out[0] if isinstance(out, (list, tuple)) else out
         self.assertLess(float((torch.as_tensor(out) - fn(*xs)).abs().max()), 1e-6)
 
     def test_unsupported_graph_falls_back_and_records_why(self) -> None:
-        from triton_toyisa.torch_backend.compiler import toyisa_backend
+        from triton_tritonflow.torch_backend.compiler import tritonflow_backend
 
         def fn(a, b):
             return torch.sigmoid(a + b)
 
         gm = symbolic_trace(fn)
         xs = [torch.randn(8, 8), torch.randn(8, 8)]
-        run = toyisa_backend(gm, xs)
-        self.assertFalse(hasattr(run, "toyisa_fx"))
-        self.assertTrue(run.toyisa_plan.fallbacks)
-        self.assertIn("sigmoid", run.toyisa_plan.fallbacks[-1].reason)
+        run = tritonflow_backend(gm, xs)
+        self.assertFalse(hasattr(run, "tritonflow_fx"))
+        self.assertTrue(run.tritonflow_plan.fallbacks)
+        self.assertIn("sigmoid", run.tritonflow_plan.fallbacks[-1].reason)
 
 
 if __name__ == "__main__":

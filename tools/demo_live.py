@@ -20,15 +20,15 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_toyisa.ttir.to_ir import parse_module
-from triton_toyisa.ttir.graph import build_def_use, walk_region
-from triton_toyisa.recognize.descriptor import describe_operation
-from triton_toyisa.idioms.detect import annotate
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.emit.assemble import assemble
-from triton_toyisa.emu.hardware import CoalescingUnit, BankConflictUnit
-from triton_toyisa.emu.exec import emulate
-from triton_toyisa.emu.precision import PrecisionPolicy
+from triton_tritonflow.emit.assemble import assemble
+from triton_tritonflow.emu.exec import emulate
+from triton_tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
+from triton_tritonflow.emu.precision import PrecisionPolicy
+from triton_tritonflow.idioms.detect import annotate
+from triton_tritonflow.isa.schema import load_builtin
+from triton_tritonflow.recognize.descriptor import describe_operation
+from triton_tritonflow.ttir.graph import build_def_use, walk_region
+from triton_tritonflow.ttir.to_ir import parse_module
 
 # Terminal styling
 CYAN = "\033[96m"
@@ -63,7 +63,7 @@ def detect_gpu():
     return {"available": False, "name": "None", "memory_gb": 0.0, "torch_version": "N/A"}
 
 
-def run_pipeline(tier: str = "t0_vecadd", isa_name: str = "toyisa1", seed: int = 42):
+def run_pipeline(tier: str = "t0_vecadd", isa_name: str = "tritonflow1", seed: int = 42):
     gpu_info = detect_gpu()
     print_banner(f"TRITON-IR → DECLARATIVE TOY-ISA LIVE COMPILER PIPELINE\n  Target ISA: {isa_name} | Kernel: {tier}")
 
@@ -200,7 +200,7 @@ def run_pipeline(tier: str = "t0_vecadd", isa_name: str = "toyisa1", seed: int =
         markers = program.markers()
         if markers:
             print(f"  ✔ Honest Refusal: Kernel requires unmodeled modulo wrap (markers={len(markers)})")
-            print(f"  ✔ Routing to eager fallback per contract FR-025.")
+            print("  ✔ Routing to eager fallback per contract FR-025.")
             toy_output = None
         else:
             inputs = {"%x_ptr": x, "%y_ptr": y, "%out_ptr": out, "%n": 1024}
@@ -311,6 +311,6 @@ def run_pipeline(tier: str = "t0_vecadd", isa_name: str = "toyisa1", seed: int =
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live End-to-End Compiler & GPU Demo")
     parser.add_argument("--tier", default="t0_vecadd", choices=["t0_vecadd", "t1_matmul", "t2_matmul_relu", "t3_modulo"])
-    parser.add_argument("--schema", default="toyisa1", choices=["toyisa1", "toyisa2", "vortex_rvgpu"])
+    parser.add_argument("--schema", default="tritonflow1", choices=["tritonflow1", "tritonflow2", "vortex_rvgpu"])
     args = parser.parse_args()
     sys.exit(run_pipeline(tier=args.tier, isa_name=args.schema))

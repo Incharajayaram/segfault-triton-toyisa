@@ -94,8 +94,8 @@ def tier(request: pytest.FixtureRequest) -> Tier:
 def real_pipeline_available() -> tuple[bool, str]:
     """Is the real upstream (parser + IR builder) importable and callable?"""
     try:
-        from triton_toyisa.ttir.parser import parse_raw  # noqa: F401
-        from triton_toyisa.ttir.to_ir import build_ir  # noqa: F401
+        from triton_tritonflow.ttir.parser import parse_raw  # noqa: F401
+        from triton_tritonflow.ttir.to_ir import build_ir  # noqa: F401
     except Exception as exc:  # pragma: no cover - the expected state until day 3
         return False, f"{type(exc).__name__}: {exc}"
     return True, "ok"

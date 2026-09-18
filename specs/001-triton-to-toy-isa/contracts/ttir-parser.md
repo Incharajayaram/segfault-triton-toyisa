@@ -1,6 +1,6 @@
 # Contract: `ttir` parser
 
-**Module**: `src/triton_toyisa/ttir/` (`lexer.py`, `parser.py`, `ssa.py`, `graph.py`)
+**Module**: `src/triton_tritonflow/ttir/` (`lexer.py`, `parser.py`, `ssa.py`, `graph.py`)
 **Consumers**: every downstream stage. **Producer**: frozen fixtures and `torch.compile`.
 **Requirements**: FR-001, FR-002, FR-003, FR-004, FR-019.
 

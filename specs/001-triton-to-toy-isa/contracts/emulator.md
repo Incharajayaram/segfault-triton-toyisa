@@ -1,6 +1,6 @@
 # Contract: device emulator and precision policy
 
-**Module**: `src/triton_toyisa/emu/` (`exec.py`, `precision.py`)
+**Module**: `src/triton_tritonflow/emu/` (`exec.py`, `precision.py`)
 **Consumers**: the PyTorch seam, differential tests. **Requirements**: FR-021, FR-022, SC-001.
 
 ## Interface

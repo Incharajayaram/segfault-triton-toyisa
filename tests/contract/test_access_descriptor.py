@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.recognize.descriptor import (
+from triton_tritonflow.recognize.descriptor import (
     AccessDescriptor,
     BudgetExhausted,
     Ok,
     Unstructured,
 )
-from triton_toyisa.recognize.walk import (
+from triton_tritonflow.recognize.walk import (
     MAX_HOPS,
     BoundedWalker,
     BudgetReached,
@@ -135,7 +135,7 @@ class TestAccessDescriptorContract(unittest.TestCase):
 
     def test_bounded_walker_budget(self) -> None:
         """BoundedWalker must raise BudgetReached when limit is exhausted."""
-        from triton_toyisa.ttir.ssa import Operation
+        from triton_tritonflow.ttir.ssa import Operation
         walker = BoundedWalker(limit=5)
         for i in range(5):
             walker.visit(Operation(name=f"op_{i}"))

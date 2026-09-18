@@ -359,8 +359,8 @@
       margin-bottom: 10px;
     }
 
-    .badge-toyisa1 { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
-    .badge-toyisa2 { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+    .badge-tritonflow1 { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+    .badge-tritonflow2 { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
     .badge-vortex  { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 
     .isa-stat-row {
@@ -426,8 +426,8 @@
         <label for="target-isa">Target ISA:</label>
         <select id="target-isa" onchange="switchTarget(this.value)">
           <option value="vortex_rvgpu">VORTEX_RVGPU (RISC-V SIMT GPGPU)</option>
-          <option value="toyisa2">TOYISA2 (Banked Scratchpad ASIC)</option>
-          <option value="toyisa1">TOYISA1 (Systolic Array Accelerator)</option>
+          <option value="tritonflow2">TOYISA2 (Banked Scratchpad ASIC)</option>
+          <option value="tritonflow1">TOYISA1 (Systolic Array Accelerator)</option>
         </select>
       </div>
       <button class="btn-action" onclick="runInteractiveDemo()">Re-Run Trace</button>
@@ -450,7 +450,7 @@
         <div class="funnel-step">Step 1: Frontend</div>
         <div class="funnel-title">PyTorch Eager API</div>
         <div class="funnel-body">Standard deep learning model calls captured by torch.compile dynamically.</div>
-        <div class="code-preview">@torch.compile(backend="toyisa")
+        <div class="code-preview">@torch.compile(backend="tritonflow")
 def model(A, B):
     return torch.matmul(A, B)</div>
       </div>
@@ -524,8 +524,8 @@ def model(A, B):
   <div id="tab-matrix" class="tab-content">
     <div class="isa-matrix-grid">
       <!-- TOYISA1 -->
-      <div class="isa-card" id="card-toyisa1">
-        <span class="isa-badge badge-toyisa1">TOYISA1: Systolic Array</span>
+      <div class="isa-card" id="card-tritonflow1">
+        <span class="isa-badge badge-tritonflow1">TOYISA1: Systolic Array</span>
         <h3>Flat Systolic ASIC</h3>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Fixed 16×16 systolic array without cache or memory coalescing.</p>
         <div class="isa-stat-row"><span class="isa-stat-label">Memory Engine</span><span class="isa-stat-val">DMA1D / DMA2D (Flat)</span></div>
@@ -537,8 +537,8 @@ def model(A, B):
       </div>
 
       <!-- TOYISA2 -->
-      <div class="isa-card" id="card-toyisa2">
-        <span class="isa-badge badge-toyisa2">TOYISA2: Banked Memory</span>
+      <div class="isa-card" id="card-tritonflow2">
+        <span class="isa-badge badge-tritonflow2">TOYISA2: Banked Memory</span>
         <h3>Multi-Bank Domain ASIC</h3>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">16-bank interleaved scratchpad memory with outer product engine.</p>
         <div class="isa-stat-row"><span class="isa-stat-label">Memory Engine</span><span class="isa-stat-val">LDG (16 Banks Interleaved)</span></div>
@@ -615,7 +615,7 @@ def model(A, B):
   </div>
 
   <footer>
-    SEGFAULT Team Project &bull; Powered by Triton-ToyISA Automated Backend Generator &bull; Zero LLVM Code Rewritten
+    SEGFAULT Team Project &bull; Powered by Triton-TritonFlow Automated Backend Generator &bull; Zero LLVM Code Rewritten
   </footer>
 </div>
 
@@ -636,7 +636,7 @@ def model(A, B):
         { line: 8, ttir: "%b_ptrs = tt.addptr %b_ptrs, %splat", isa: "VADD           dst=%b_ptrs_43, src0=%b_ptrs_35, src1=%splat", cost: "102.4c", note: "Pointer Increment" }
       ]
     },
-    toyisa2: {
+    tritonflow2: {
       name: "TOYISA2",
       desc: "Multi-Banked Scratchpad ASIC",
       cost: "28402.0 cycles",
@@ -651,7 +651,7 @@ def model(A, B):
         { line: 8, ttir: "%b_ptrs = tt.addptr %b_ptrs, %splat", isa: "VPU            op=addptr, dst=%b_ptrs_43", cost: "819.2c", note: "Banked VPU" }
       ]
     },
-    toyisa1: {
+    tritonflow1: {
       name: "TOYISA1",
       desc: "Systolic Array Accelerator",
       cost: "35772.9 cycles",

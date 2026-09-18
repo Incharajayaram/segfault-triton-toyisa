@@ -3,11 +3,11 @@
 
 import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import torch
-import numpy as np
 
 
 def test_device_registration():
@@ -16,7 +16,7 @@ def test_device_registration():
     print("TEST 1: Device Registration")
     print("=" * 70)
     
-    from triton_toyisa.torch_backend.compiler import verify_device
+    from triton_tritonflow.torch_backend.compiler import verify_device
     result = verify_device()
     
     # Check all the requirements
@@ -44,7 +44,7 @@ def test_device_visibility():
     print("TEST 2: Device Visibility (SC-001)")
     print("=" * 70)
     
-    from triton_toyisa.torch_backend.device_interface import ToyIsaInterface
+    from triton_tritonflow.torch_backend.device_interface import ToyIsaInterface
     
     try:
         # Test device_count, is_available, current_device
@@ -54,7 +54,7 @@ def test_device_visibility():
         
         checks = {
             "device_count() >= 1": count >= 1,
-            "is_available() == True": available == True,
+            "is_available() == True": available,
             "current_device() works": current is not None,
         }
         
@@ -81,8 +81,8 @@ def test_tensor_to_device():
     print("=" * 70)
     
     try:
-        from triton_toyisa.torch_backend.device import ToyDevice
-        from triton_toyisa.torch_backend.device_interface import DATA_PLANE_GAP
+        from triton_tritonflow.torch_backend.device import ToyDevice
+        from triton_tritonflow.torch_backend.device_interface import DATA_PLANE_GAP
         
         x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
         print(f"Created tensor: {x}")
@@ -98,7 +98,7 @@ def test_tensor_to_device():
         
         if torch.equal(x, x_roundtrip):
             print("✓ PASS: Tensor data plane transfer to toy device and back succeeds")
-            print(f"ℹ NOTE: Direct tensor.to('toyisa') is gated: {DATA_PLANE_GAP[:70]}...")
+            print(f"ℹ NOTE: Direct tensor.to('tritonflow') is gated: {DATA_PLANE_GAP[:70]}...")
             print()
             return True
         else:
@@ -114,7 +114,7 @@ def test_tensor_to_device():
 
 
 def test_backend_compilation():
-    """Test that torch.compile with backend='toyisa' lowers and executes correctly."""
+    """Test that torch.compile with backend='tritonflow' lowers and executes correctly."""
     print("=" * 70)
     print("TEST 4: Backend Compilation")
     print("=" * 70)
@@ -123,14 +123,14 @@ def test_backend_compilation():
         def matmul_fn(a, b):
             return torch.matmul(a, b)
         
-        compiled = torch.compile(matmul_fn, backend='toyisa')
+        compiled = torch.compile(matmul_fn, backend='tritonflow')
         a = torch.randn(128, 64, dtype=torch.float32)
         b = torch.randn(64, 128, dtype=torch.float32)
         out = compiled(a, b)
         expected = torch.matmul(a, b)
         
         max_diff = torch.max(torch.abs(out - expected)).item()
-        print(f"✓ PASS: Function compiled and executed via toyisa backend successfully")
+        print("✓ PASS: Function compiled and executed via tritonflow backend successfully")
         print(f"   Output shape: {out.shape}")
         print(f"   Max diff with eager (TF32 derived tolerance): {max_diff:.6f}")
         print()
@@ -149,7 +149,7 @@ def test_recorded_kernels():
     print("TEST 5: Recorded Kernels")
     print("=" * 70)
     
-    from triton_toyisa.torch_backend.compiler import recorded_kernels
+    from triton_tritonflow.torch_backend.compiler import recorded_kernels
     
     kernels = recorded_kernels()
     print(f"Recorded kernels: {list(kernels.keys())}")
@@ -173,13 +173,14 @@ def test_emulator_basic():
     print("=" * 70)
     
     try:
-        from triton_toyisa.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
-        from triton_toyisa.emu.exec import emulate
         import numpy as np
+
+        from triton_tritonflow.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
+        from triton_tritonflow.emu.exec import emulate
         
         # Create a simple program
         prog = Program(
-            isa_name='toyisa',
+            isa_name='tritonflow',
             schema_version=1,
             inputs=('A', 'B', 'Out'),
             instrs=(
@@ -231,7 +232,7 @@ def test_mvp_requirements():
     
     # CHK035: The seam is the artifact of record and is proven before the pipeline is wired to it
     try:
-        from triton_toyisa.torch_backend.compiler import verify_device
+        from triton_tritonflow.torch_backend.compiler import verify_device
         result = verify_device()
         results["CHK035 - Seam proven"] = result["registered_backend"] and result["is_available"]
     except Exception as e:
@@ -244,9 +245,9 @@ def test_mvp_requirements():
     
     # CHK006: The failure route for unparseable input is explicitly handled
     try:
-        from triton_toyisa.emit.ir import UnsupportedMarker
+        from triton_tritonflow.emit.ir import UnsupportedMarker
         # Verify the marker class exists and can be instantiated
-        marker = UnsupportedMarker(op_name="test", reason="test reason")
+        UnsupportedMarker(op_name="test", reason="test reason")
         results["CHK006 - Failure route exists"] = True
     except Exception:
         results["CHK006 - Failure route exists"] = False

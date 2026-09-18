@@ -9,14 +9,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from triton_toyisa.report.coverage import (
+from triton_tritonflow.report.coverage import (
     CoverageReport,
     TierCoverage,
     UnsupportedOp,
     coverage_report,
     render_markdown,
 )
-from triton_toyisa.report.transfer import (
+from triton_tritonflow.report.transfer import (
     Edit,
     TransferReport,
     limitations_document,
@@ -70,17 +70,17 @@ class TestCoverageReportContract(unittest.TestCase):
     def test_transfer_report_contract(self) -> None:
         """FR-030: transfer report tracks stages and edits outside schema and rules."""
         runs = [
-            {"isa_name": "toyisa1", "tier_name": "t0_vecadd", "total_cost": 9217.5},
-            {"isa_name": "toyisa2", "tier_name": "t0_vecadd", "total_cost": 7374.0},
+            {"isa_name": "tritonflow1", "tier_name": "t0_vecadd", "total_cost": 9217.5},
+            {"isa_name": "tritonflow2", "tier_name": "t0_vecadd", "total_cost": 7374.0},
         ]
-        edits = [Edit(path="isa/schemas/toyisa2.yaml", lines_changed=96, reason="New target ISA")]
-        treport = transfer_report(runs, edits=edits, baseline_isa="toyisa1", target_isa="toyisa2")
+        edits = [Edit(path="isa/schemas/tritonflow2.yaml", lines_changed=96, reason="New target ISA")]
+        treport = transfer_report(runs, edits=edits, baseline_isa="tritonflow1", target_isa="tritonflow2")
         self.assertIsInstance(treport, TransferReport)
         self.assertTrue(len(treport.stages) > 0)
         self.assertEqual(treport.cost_comparison["t0_vecadd"], (9217.5, 7374.0))
         md = render_transfer_markdown(treport)
-        self.assertIn("toyisa1", md)
-        self.assertIn("toyisa2", md)
+        self.assertIn("tritonflow1", md)
+        self.assertIn("tritonflow2", md)
 
     def test_limitations_document(self) -> None:
         """FR-031: non-goals carry general solutions/citations or explicit no known implementation."""

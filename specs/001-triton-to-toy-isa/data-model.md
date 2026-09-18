@@ -11,11 +11,11 @@ Format: YAML, one file per ISA, loaded by `isa/schema.py:load_schema()`. The doc
 ISA-specific input to the pipeline; everything else is either ISA-agnostic or lives in one rule module per
 ISA (FR-013…FR-016).
 
-### 1.1 Complete ISA-1 document (`isa/schemas/toyisa1.yaml`)
+### 1.1 Complete ISA-1 document (`isa/schemas/tritonflow1.yaml`)
 
 ```yaml
 schema_version: 1
-name: toyisa1
+name: tritonflow1
 description: >
   Flat-memory tile ISA. 1-D contiguous DMA, 2-D tiled DMA, square MAC tiles,
   post-loop elementwise epilogue. No scratchpad/accumulator distinction: bank
@@ -93,7 +93,7 @@ Predicates: `X == k`, `X % k == 0`, `aligned(X, k)`, `in_bounds(base, length)`, 
 - Deliberately *not* Turing-complete. ACT's addressing phase is integer constraint programming (§6); a full
   CP solver does not fit the budget, and a decidable subset is enough to make selection real.
 
-### 1.3 ISA-2 document (`isa/schemas/toyisa2.yaml`) — what differs
+### 1.3 ISA-2 document (`isa/schemas/tritonflow2.yaml`) — what differs
 
 Same grammar, different contents, along exactly the four axes of §`isa2` in the methodology:
 
@@ -106,7 +106,7 @@ Same grammar, different contents, along exactly the four axes of §`isa2` in the
 | Accumulator order | `k_major_sequential` | `k_blocked(4)` — *different*, on purpose |
 
 **Rule**: ISA-2 must be authored against this table alone, without consulting the ISA-1 rule module, and the
-transfer report must list every line that had to change outside `isa/schemas/` and `isa/rules/toyisa2.py`.
+transfer report must list every line that had to change outside `isa/schemas/` and `isa/rules/tritonflow2.py`.
 That list is the falsification instrument (FR-030, US4).
 
 ---
@@ -198,7 +198,7 @@ produced (T-4, D10).
 **Serialised form (FR-020)** — stable, round-trippable, human-readable:
 
 ```
-; toyisa1  kernel=t1_matmul  cost=18432.0
+; tritonflow1  kernel=t1_matmul  cost=18432.0
 LOOP k: 0..32 step 1 iter(%a_ptrs, %b_ptrs, %acc)
   DMA1D  dst=smem_a  src=a_ptrs  len=2048
   DMA1D  dst=smem_b  src=b_ptrs  len=2048
@@ -228,7 +228,7 @@ it never falls back to a default instruction (FR-017).
 
 | Entity | Fields / members |
 |---|---|
-| `ToyDevice` | `name = "toyisa"`, `storage: dict[DevicePtr, np.ndarray]`, `allocator`, `streams`, `events`, `rng_state` |
+| `ToyDevice` | `name = "tritonflow"`, `storage: dict[DevicePtr, np.ndarray]`, `allocator`, `streams`, `events`, `rng_state` |
 | `ToyIsaInterface(DeviceInterface)` | the ~14 device-slot methods: `current_device`, `set_device`, `device_count`, `is_available`, `stream`, `current_stream`, `set_stream`, `synchronize`, `get_device_properties`, … plus `Event`, `Stream`, `Worker` nested classes; unimplemented slots explicitly delegate or raise `NotImplementedError` with a reason |
 | `Emulator` | `emulate(program: Program, inputs: dict) -> dict`; `apply(instr: Instr)`; `precision_policy: PrecisionPolicy` |
 | `PrecisionPolicy` | `input_precision: "tf32" \| "ieee"`, `accumulation_order`, `tolerance_for(dtype) -> float`, `derivation: str` |
@@ -242,7 +242,7 @@ it never falls back to a default instruction (FR-017).
 
 ```json
 {
-  "isa": "toyisa1", "tier": "t1_matmul", "kernel": "matmul",
+  "isa": "tritonflow1", "tier": "t1_matmul", "kernel": "matmul",
   "fully_lowered": true,                    // boolean first, always
   "largest_lowered_subgraph": 0.94,
   "annotated_node_fraction": 0.97,          // labelled: upper bound
@@ -263,10 +263,10 @@ it never falls back to a default instruction (FR-017).
 ### TransferReport (per stage, per ISA — FR-030)
 
 ```json
-{ "isa": "toyisa2",
+{ "isa": "tritonflow2",
   "stages": [ {"stage": "parser", "transferred": true,  "edit": null},
               {"stage": "recogniser", "transferred": false,
-               "edit": "isa/rules/toyisa2.py:88 (stride-1 assumption)"} ],
+               "edit": "isa/rules/tritonflow2.py:88 (stride-1 assumption)"} ],
   "transfer_rate": 0.86,
   "new_rules": 7, "new_rule_cost": 0.39,
   "edits_outside_schema_and_rules": ["recognize/walk.py:112"] }

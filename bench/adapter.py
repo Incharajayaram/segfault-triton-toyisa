@@ -16,13 +16,12 @@ DETERMINISM CONTRACT (see docs/team/testing-ci.md S7):
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from pathlib import Path
-import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT / "src") not in sys.path:
@@ -69,7 +68,7 @@ def make_inputs(tier: str, seed: int = SEED) -> dict[str, np.ndarray]:
 def lower_fixture(tier: str) -> RunContext | None:
     """Run the real pipeline on one frozen fixture."""
     try:
-        from triton_toyisa.lower import lower_fixture as _lower
+        from triton_tritonflow.lower import lower_fixture as _lower
         return _lower(tier)
     except Exception:
         return None

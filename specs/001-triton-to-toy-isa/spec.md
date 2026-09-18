@@ -34,7 +34,7 @@ registration against a documented API with an in-tree template (`torch_openreg/c
 2. **Given** the same registration, **When** an operation the pipeline cannot lower is compiled, **Then** it
    runs through PyTorch's eager fallback and the coverage report lists it as `UNSUPPORTED` — never a wrong
    number.
-3. **Given** `DeviceInterface` is registered, **When** `torch.tensor(...).to("toyisa")` is called, **Then**
+3. **Given** `DeviceInterface` is registered, **When** `torch.tensor(...).to("tritonflow")` is called, **Then**
    the device is visible to PyTorch (`device_count`, `is_available`, `current_device` behave).
 
 ---

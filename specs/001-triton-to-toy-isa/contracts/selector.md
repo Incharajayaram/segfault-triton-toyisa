@@ -1,6 +1,6 @@
 # Contract: instruction selection
 
-**Module**: `src/triton_toyisa/isa/select.py`
+**Module**: `src/triton_tritonflow/isa/select.py`
 **Consumers**: the emitter. **Requirements**: FR-017, FR-018, SC-005.
 
 ## Interface

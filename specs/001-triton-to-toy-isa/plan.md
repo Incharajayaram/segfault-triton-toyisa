@@ -74,7 +74,7 @@ specs/001-triton-to-toy-isa/
 ### Source Code (repository root)
 
 ```text
-src/triton_toyisa/
+src/triton_tritonflow/
 ├── __init__.py
 ├── cli.py
 ├── ttir/
@@ -103,11 +103,11 @@ src/triton_toyisa/
 │   ├── select.py
 │   ├── rules/
 │   │   ├── __init__.py
-│   │   ├── toyisa1.py
-│   │   └── toyisa2.py
+│   │   ├── tritonflow1.py
+│   │   └── tritonflow2.py
 │   └── schemas/
-│       ├── toyisa1.yaml
-│       └── toyisa2.yaml
+│       ├── tritonflow1.yaml
+│       └── tritonflow2.yaml
 ├── emit/
 │   ├── __init__.py
 │   ├── ir.py
@@ -173,10 +173,10 @@ the marker is applied automatically; every contract test is parametrised over `h
 input classes with a day-3 deadline flag (`STRICT_REAL`); `make ci` is exactly what CI runs; and the
 benchmark emits 32 rows every run without ever gating a merge.
 
-**Structure Decision**: single project, library + CLI (`src/triton_toyisa`), because the artifact is one
+**Structure Decision**: single project, library + CLI (`src/triton_tritonflow`), because the artifact is one
 pipeline and one seam; a multi-package split would add interfaces that nothing consumes. The `harness/`
 subpackage is the only module that imports Triton, and it is excluded from the runtime import graph — the
-pipeline imports it nowhere (asserted by a test that imports `triton_toyisa` with Triton uninstalled).
+pipeline imports it nowhere (asserted by a test that imports `triton_tritonflow` with Triton uninstalled).
 
 ---
 
@@ -270,8 +270,8 @@ semantics live in exactly one place. This is what makes the critical path's firs
 | `select.enumerate_candidates` | `enumerate_candidates(schema, kind, descriptor, tile) -> list[Candidate]` | includes rejected, with the failing predicate |
 | `select.select` | `select(schema, kind, descriptor, tile) -> SelectionReport` | min cost among admissible; no default (EC-063) |
 | `select.oracle_min` | `oracle_min(schema, kind, descriptor, tile) -> SelectionReport` | exhaustive oracle; the gap source (EC-072) |
-| `rules.toyisa1.ISA_RULES` | `list[Rule]` | the only ISA-1-specific lowering logic |
-| `rules.toyisa2.ISA_RULES` | `list[Rule]` | authored from `data-model.md` §1.3 alone |
+| `rules.tritonflow1.ISA_RULES` | `list[Rule]` | the only ISA-1-specific lowering logic |
+| `rules.tritonflow2.ISA_RULES` | `list[Rule]` | authored from `data-model.md` §1.3 alone |
 
 ### 7. `emit/` — FR-019, FR-020, FR-005
 
@@ -301,12 +301,12 @@ semantics live in exactly one place. This is what makes the critical path's firs
 
 | Function | Signature | Behaviour |
 |---|---|---|
-| `compiler.toyisa_backend` | `toyisa_backend(gm, example_inputs) -> Callable` | `@register_backend` entry point |
+| `compiler.tritonflow_backend` | `tritonflow_backend(gm, example_inputs) -> Callable` | `@register_backend` entry point |
 | `compiler.extract_ttir` | `extract_ttir(gm, example_inputs) -> str` | captured IR; `PARSE_UNSUPPORTED` handled, not raised (EC-096) |
 | `compiler.lower_and_run` | `lower_and_run(ttir_text, inputs) -> list[torch.Tensor]` | pipeline → emulator → tensors |
 | `compiler.fallback` | `fallback(gm, example_inputs) -> Callable` | eager path with a `FallbackRecord` (EC-097) |
 | `device_interface.ToyIsaInterface` | class | the device slots; unimplemented ones raise with a reason (EC-099) |
-| `device_interface.register_interface` | `register_interface() -> None` | `register_interface_for_device("toyisa")` |
+| `device_interface.register_interface` | `register_interface() -> None` | `register_interface_for_device("tritonflow")` |
 | `device.ToyDevice.allocate` | `allocate(nbytes) -> DevicePtr` | |
 | `device.ToyDevice.copy_host_to_device` | `copy_host_to_device(src, dst) -> None` | |
 | `device.ToyDevice.synchronize` | `synchronize() -> None` | no-op, documented as such |
@@ -358,7 +358,7 @@ Three orders were considered; two were rejected on evidence.
 | 4 (1 d) | assembly with variant selection and costs; emulator; `PARSE_UNSUPPORTED` path | `isa/*`, `emit/*`, `emu/*` |
 | 5 (0.75 d) | wire the real pipeline behind the seam; run a real torch op | `torch_backend/compiler.py` |
 | 6 (0.5 d) | coverage, selection-quality and limitations reports | `report/*` |
-| 7 (0.5 d) | second ISA + transfer measurement | `isa/schemas/toyisa2.yaml`, `isa/rules/toyisa2.py`, `report/transfer.py` |
+| 7 (0.5 d) | second ISA + transfer measurement | `isa/schemas/tritonflow2.yaml`, `isa/rules/tritonflow2.py`, `report/transfer.py` |
 
 **Cut order** (published, per Constitution workflow rule 6): fuzz kernel → canonicalisation entirely →
 block 7 → Tier-2 epilogue → Tier-3 fixture. **Never cut:** Tier-3 negative control, coverage table,
@@ -371,7 +371,7 @@ true-negative test, the seam.
 | Violation | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | Hand-rolled lexer/parser instead of a parser generator (e.g. `lark`) | The ttir text is semi-structured MLIR; the failure route must be total and must report line/column, and the parser must run with no Triton installed | A generator adds a grammar to maintain and still needs hand-written error recovery for `PARSE_UNSUPPORTED`; the grammar is small (≈18 op names in Tier 1) |
-| Per-ISA rule module (`isa/rules/toyisaN.py`) | Some lowering logic is genuinely ISA-specific; hiding it in `if isa == …` branches would make the transfer experiment meaningless | A single shared rule table would force ISA-2's differences into conditionals, which is exactly the "ISA-1 baked in" failure the experiment exists to detect |
+| Per-ISA rule module (`isa/rules/tritonflowN.py`) | Some lowering logic is genuinely ISA-specific; hiding it in `if isa == …` branches would make the transfer experiment meaningless | A single shared rule table would force ISA-2's differences into conditionals, which is exactly the "ISA-1 baked in" failure the experiment exists to detect |
 | A second semantics implementation (the emulator) alongside the reference | Principle II requires executing the emitted stream, not re-deriving the computation; the differential test then compares against eager PyTorch rather than against another NumPy routine | Reusing a NumPy reference as "the emulator" would validate a shortcut, and the emitted program would never be executed — the validation would prove nothing about the artifact |
 
 ## Phase 1 → Phase 2 handoff

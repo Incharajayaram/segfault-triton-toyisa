@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone test runner for triton_toyisa.
+"""Standalone test runner for triton_tritonflow.
 
 Runs all tests using Python standard library unittest.
 Zero dependency on pytest or third-party test frameworks.
@@ -54,7 +54,7 @@ def build_suite(suite_name: str | None = None, pattern: str = "test_*.py") -> un
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="triton_toyisa test runner (unittest)")
+    parser = argparse.ArgumentParser(description="triton_tritonflow test runner (unittest)")
     parser.add_argument("--suite", choices=["all", "unit", "contract", "integration", "e2e"], default="all")
     parser.add_argument("-v", "--verbose", action="store_true", default=True, help="verbose output")
     parser.add_argument("-k", "--pattern", default="test_*.py", help="test file pattern")
@@ -64,23 +64,23 @@ def main() -> int:
     suite = build_suite(suite_choice, pattern=args.pattern)
 
     count = suite.countTestCases()
-    print(f"============================================================")
-    print(f"  triton_toyisa test runner (unittest) — {count} test cases")
+    print("============================================================")
+    print(f"  triton_tritonflow test runner (unittest) — {count} test cases")
     print(f"  Suite: {args.suite} | Pattern: {args.pattern}")
-    print(f"============================================================")
+    print("============================================================")
 
     start_time = time.perf_counter()
     runner = unittest.TextTestRunner(verbosity=2 if args.verbose else 1)
     result = runner.run(suite)
     elapsed = time.perf_counter() - start_time
 
-    print(f"\n------------------------------------------------------------")
+    print("\n------------------------------------------------------------")
     print(f"Ran {result.testsRun} tests in {elapsed:.3f}s")
     print(f"  Passed:   {result.testsRun - len(result.failures) - len(result.errors) - len(result.skipped)}")
     print(f"  Failed:   {len(result.failures)}")
     print(f"  Errors:   {len(result.errors)}")
     print(f"  Skipped:  {len(result.skipped)}")
-    print(f"------------------------------------------------------------")
+    print("------------------------------------------------------------")
 
     return 0 if result.wasSuccessful() else 1
 

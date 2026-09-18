@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 source = Path("/home/shravan/Documents/Projects/tmp/segfault/triton-generator-merge")
-target = Path("/home/shravan/Documents/Projects/segfault-triton-toyisa")
+target = Path("/home/shravan/Documents/Projects/segfault-triton-tritonflow")
 
 def get_all_files(base, exclude_dirs=None):
     """Get all files relative to base, excluding certain directories."""

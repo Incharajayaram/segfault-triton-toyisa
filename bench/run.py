@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "bench"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from adapter import RunContext, lower_fixture  # noqa: E402
-from fixtures_lib import load_golden  # noqa: E402
+from adapter import RunContext, lower_fixture
+from fixtures_lib import load_golden
 
 SCHEMA = 1
 

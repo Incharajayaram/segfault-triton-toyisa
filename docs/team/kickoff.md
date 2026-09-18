@@ -74,7 +74,7 @@ integration risk to the end. Instead:
 | A | **`RawModule` dataclasses committed before lunch**, then fixtures, then the parser happy path | nothing depends on anyone, and A owns the seam everyone else needs |
 | B | `ssa.py`/`types.py` field definitions, then `build_ir` against a **hand-built `RawModule`** | the seam is frozen at lunch, so B never waits for the parser |
 | C | `AccessDescriptor` committed before lunch, then the expectation table against a **hand-built `Module`**, then the `tts.make_tptr` conformance harness | a dataclass literal is enough to write every test |
-| D | `toyisa1.yaml`, the predicate language, `validate_schema`, `select` — then the **day-1 smoke test**: hard-coded 64×64 matmul on the registered device | hand-built descriptors are the real input to the selector; the seam retires the only integration risk today |
+| D | `tritonflow1.yaml`, the predicate language, `validate_schema`, `select` — then the **day-1 smoke test**: hard-coded 64×64 matmul on the registered device | hand-built descriptors are the real input to the selector; the seam retires the only integration risk today |
 
 Frozen before lunch on day 1 — after that, changes go through the owner, and an agreement in chat is not a
 freeze (each item is **committed code with fields only, no logic**):

@@ -11,8 +11,8 @@ import unittest
 
 import numpy as np
 
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.lower import lower_fixture
+from triton_tritonflow.isa.schema import load_builtin
+from triton_tritonflow.lower import lower_fixture
 
 
 class TestEndToEndContract(unittest.TestCase):

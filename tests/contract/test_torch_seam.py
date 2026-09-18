@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from triton_toyisa.torch_backend.device import (
+from triton_tritonflow.torch_backend.device import (
     DeviceError,
     OutOfStorage,
     ToyDevice,
@@ -18,7 +18,7 @@ from triton_toyisa.torch_backend.device import (
 try:
     import torch
 
-    from triton_toyisa.torch_backend.device_interface import (
+    from triton_tritonflow.torch_backend.device_interface import (
         NotSupportedError,
         ToyIsaInterface,
         install,
@@ -92,7 +92,7 @@ class TestTorchSeamContract(unittest.TestCase):
         self.assertEqual(ToyIsaInterface.current_device(), 0)
 
         props = ToyIsaInterface.get_device_properties(0)
-        self.assertIn("toyisa", props.name)
+        self.assertIn("tritonflow", props.name)
 
         # Synchronous device raises on asynchronous stream operations
         with self.assertRaises(NotSupportedError):

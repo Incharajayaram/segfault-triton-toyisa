@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.emu.hardware import BankConflictUnit, CoalescingUnit
+from triton_tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
 
 
 class TestHardwareModels(unittest.TestCase):

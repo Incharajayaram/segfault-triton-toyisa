@@ -1,6 +1,6 @@
 # Contract: reports (coverage, selection, transfer)
 
-**Module**: `src/triton_toyisa/report/` (`coverage.py`, `transfer.py`)
+**Module**: `src/triton_tritonflow/report/` (`coverage.py`, `transfer.py`)
 **Consumers**: the write-up, the reviewer, the limitation document.
 **Requirements**: FR-027 … FR-031, SC-002, SC-003, SC-006, SC-009.
 
@@ -43,8 +43,8 @@ limitations_document(non_goals: list[NonGoal]) -> str
 ```
 | ISA      | Tier    | fully lowered | largest subgraph | annotated (≤) | unsupported | latency ms |
 |----------|---------|---------------|------------------|---------------|-------------|------------|
-| toyisa1  | t0_vecadd | yes         | 1.00             | 1.00          | –           | 12.4       |
-| toyisa1  | t3_modulo | NO          | 0.31             | 0.72          | 1 (loc("x_ptr")) | 19.8  |
+| tritonflow1  | t0_vecadd | yes         | 1.00             | 1.00          | –           | 12.4       |
+| tritonflow1  | t3_modulo | NO          | 0.31             | 0.72          | 1 (loc("x_ptr")) | 19.8  |
 ```
 
 ## Failure modes

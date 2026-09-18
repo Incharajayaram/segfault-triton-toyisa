@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from triton_toyisa.ttir.parser import parse_raw
+from triton_tritonflow.ttir.parser import parse_raw
 
 
 class TestParserSyntaxNegative(unittest.TestCase):

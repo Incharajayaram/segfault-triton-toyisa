@@ -154,7 +154,7 @@ count stays auditable: 27 + 20 + 10 + 15 + 10 + 10 + 8 = 100.*
 | ID | Case | Required behaviour | Verification |
 |---|---|---|---|
 | EC-093 | 64×64 matmul through `torch.compile` | executes on the toy device; matches eager within tolerance (SC-001) | `tests/integration/test_torch_seam.py` |
-| EC-094 | `torch.tensor(...).to("toyisa")` | succeeds; device visible to PyTorch | same |
+| EC-094 | `torch.tensor(...).to("tritonflow")` | succeeds; device visible to PyTorch | same |
 | EC-095 | `device_count` / `is_available` / `current_device` | consistent, non-crashing values | `tests/contract/test_device_interface.py` |
 | EC-096 | Graph break inside the compiled function | handled by PyTorch; the break is recorded in the coverage report, not hidden | `tests/integration/test_torch_seam.py` |
 | EC-097 | Operation outside the corpus | eager fallback with a **correct** result plus a `FallbackRecord`; never a wrong number | same |

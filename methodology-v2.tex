@@ -679,8 +679,8 @@ than rewrite'' (TensorLift \S3.2).
 \subsection{Annotation}
 
 Each matched idiom is tagged on the graph with a metadata attribute analogous to TensorLift's
-\code{tensorlift.mac} and \code{taidl.*} annotations (e.g.\ \code{toyisa.mac},
-\code{toyisa.dma\_role}), so that assembly is a pure consumer of annotations.
+\code{tensorlift.mac} and \code{taidl.*} annotations (e.g.\ \code{tritonflow.mac},
+\code{tritonflow.dma\_role}), so that assembly is a pure consumer of annotations.
 
 \noindent\falsified{} v1 attributed the same annotate/assemble separation to ``TensorReduce and TAIDL/ACT''.
 \code{TensorReduce} appears exactly once in v1, carries no citation, and is not one of the four source
@@ -722,7 +722,7 @@ human-readable disassembly for debugging and for the completeness report.
 
 \section{Opaque fallback}\label{sec:fallback}
 
-Any operation reaching assembly without a \code{toyisa.*} annotation is emitted as an explicit
+Any operation reaching assembly without a \code{tritonflow.*} annotation is emitted as an explicit
 \code{UNSUPPORTED(<op name>)} marker rather than being dropped, mistranslated, or causing a crash. This
 adopts TensorLift's principle verbatim --- ``An instruction that fails to match a template simply receives no
 annotation, and Stage 3 falls back to opaque semantics rather than producing incorrect TAIDL'' (TensorLift
@@ -755,16 +755,16 @@ This is the section that makes the artifact a contribution rather than an exerci
 from torch._dynamo.backends.registry import register_backend
 from torch._dynamo.device_interface import DeviceInterface, register_interface_for_device
 
-def toyisa(gm, example_inputs):
+def tritonflow(gm, example_inputs):
     # gm -> toy ISA instruction stream -> device emulator
     return gm.forward
 
-class ToyISAInterface(DeviceInterface):
+class TritonFlowInterface(DeviceInterface):
     # stub-level implementation, modelled on torch_openreg/compiler.py
     ...
 
-register_backend(name="toyisa")(toyisa)
-register_interface_for_device("toyisa", ToyISAInterface)
+register_backend(name="tritonflow")(tritonflow)
+register_interface_for_device("tritonflow", TritonFlowInterface)
 \end{lstlisting}
 
 \noindent A real PyTorch operation is then compiled and executed through the generated backend on the toy
@@ -796,7 +796,7 @@ ACT's 2.3$\times$ NKI coverage claim measures (ACT \S8.3--\S8.6). The evaluation
 \subsection{Coverage --- corrected definition}
 
 \falsified{} v1 defined coverage as ``the fraction of \code{ttir} op nodes that received a
-\code{toyisa.*} annotation''. \textbf{This metric is gameable and semantically weak:} one unannotated
+\code{tritonflow.*} annotation''. \textbf{This metric is gameable and semantically weak:} one unannotated
 operation early in a dataflow chain renders every downstream annotation meaningless, while the node
 percentage stays high. A blended percentage would therefore overstate real coverage. Corrected definitions,
 all reported \emph{per tier}:
@@ -963,7 +963,7 @@ disagree.
       such row into a hard failure. This is what makes four-way parallel work safe \emph{and} keeps the
       parallelism from becoming permanent.
 \item \textbf{Module and contract coverage is checked, not trusted}: every module under
-      \path{src/triton_toyisa} must have \path{tests/unit/test_<module>.py}, and every contract file must have
+      \path{src/triton_tritonflow} must have \path{tests/unit/test_<module>.py}, and every contract file must have
       \path{tests/contract/test_<name>.py}. The same checker enforces that \code{triton} is imported nowhere
       outside \code{harness/}, which is why the suite runs with no GPU, Triton or torch.
 \item \textbf{Determinism is a rule, not an aspiration}: no GPU, no network, no timing assertions, one

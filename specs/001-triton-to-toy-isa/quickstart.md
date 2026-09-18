@@ -13,7 +13,7 @@ pip install -e '.[dev]'        # runtime: pyyaml, numpy;  dev: pytest, triton==3
 ## 1. (Once) Regenerate the fixtures — needs Triton, needs no GPU
 
 ```bash
-python -m triton_toyisa.cli extract --out fixtures --force
+python -m triton_tritonflow.cli extract --out fixtures --force
 ```
 
 Writes `fixtures/t{0,1,2,3}_*.ttir`, `fixtures/fuzz.ttir`, `fixtures/ttgir_snapshot.txt` and
@@ -23,21 +23,21 @@ without `--force`, because regenerating fixtures is a reviewed act (FR-034).
 Sanity check that the gate is real (no driver, no GPU):
 
 ```bash
-python -m triton_toyisa.cli extract --check-gate      # prints: GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]
+python -m triton_tritonflow.cli extract --check-gate      # prints: GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]
 ```
 
 ## 2. Compile a frozen kernel to a toy-ISA program
 
 ```bash
-python -m triton_toyisa.cli compile fixtures/t1_matmul.ttir \
-    --schema src/triton_toyisa/isa/schemas/toyisa1.yaml \
+python -m triton_tritonflow.cli compile fixtures/t1_matmul.ttir \
+    --schema src/triton_tritonflow/isa/schemas/tritonflow1.yaml \
     --out /tmp/t1.prog --selection-out /tmp/t1.selection.json
 ```
 
 Prints the program:
 
 ```
-; toyisa1  schema_version=1  kernel=matmul  cost=18432.0
+; tritonflow1  schema_version=1  kernel=matmul  cost=18432.0
 LOOP k: 0..32 step 1 iter(%a_ptrs, %b_ptrs, %acc)
   DMA2D  dst=smem_a  src=a_ptrs  sizes=[64,32] strides=[32,1]
   DMA2D  dst=smem_b  src=b_ptrs  sizes=[32,64] strides=[64,1]
@@ -57,14 +57,14 @@ and the selection report, which is the evidence that the generator *chose*:
 Tier 3 is expected to differ, and that is the point:
 
 ```bash
-python -m triton_toyisa.cli compile fixtures/t3_modulo.ttir --schema .../toyisa1.yaml --out /tmp/t3.prog
+python -m triton_tritonflow.cli compile fixtures/t3_modulo.ttir --schema .../tritonflow1.yaml --out /tmp/t3.prog
 # UNSUPPORTED(tt.load) loc("x_ptr") reason="modulo wraparound"   -- a marker, not a crash
 ```
 
 ## 3. Execute the program on the device emulator
 
 ```bash
-python -m triton_toyisa.cli emulate /tmp/t1.prog --inputs tests/data/t1_inputs.npz --out /tmp/t1.npz \
+python -m triton_tritonflow.cli emulate /tmp/t1.prog --inputs tests/data/t1_inputs.npz --out /tmp/t1.npz \
     --parity-out /tmp/t1.parity.json
 ```
 
@@ -79,8 +79,8 @@ python -m triton_toyisa.cli emulate /tmp/t1.prog --inputs tests/data/t1_inputs.n
 ## 4. Generate the reports
 
 ```bash
-python -m triton_toyisa.cli report  --corpus fixtures --schema .../toyisa1.yaml --out reports/coverage.md
-python -m triton_toyisa.cli transfer --isa1 .../toyisa1.yaml --isa2 .../toyisa2.yaml \
+python -m triton_tritonflow.cli report  --corpus fixtures --schema .../tritonflow1.yaml --out reports/coverage.md
+python -m triton_tritonflow.cli transfer --isa1 .../tritonflow1.yaml --isa2 .../tritonflow2.yaml \
     --corpus fixtures --out reports/transfer.md
 ```
 
@@ -89,9 +89,9 @@ The coverage table leads with the boolean, per ISA and per tier:
 ```
 | ISA      | Tier      | fully lowered | largest subgraph | annotated (<=) | unsupported        |
 |----------|-----------|---------------|------------------|----------------|--------------------|
-| toyisa1  | t0_vecadd | yes           | 1.00             | 1.00           | –                  |
-| toyisa1  | t1_matmul | yes           | 1.00             | 1.00           | –                  |
-| toyisa1  | t3_modulo | NO            | 0.31             | 0.72           | 1 (loc("x_ptr"))   |
+| tritonflow1  | t0_vecadd | yes           | 1.00             | 1.00           | –                  |
+| tritonflow1  | t1_matmul | yes           | 1.00             | 1.00           | –                  |
+| tritonflow1  | t3_modulo | NO            | 0.31             | 0.72           | 1 (loc("x_ptr"))   |
 ```
 
 The transfer table leads with the per-stage edit list, not the rate:
@@ -100,7 +100,7 @@ The transfer table leads with the per-stage edit list, not the rate:
 | stage       | transferred | edit                                        |
 |-------------|-------------|---------------------------------------------|
 | parser      | yes         | –                                           |
-| recogniser  | no          | isa/rules/toyisa2.py:88 (stride-1 assumed)  |
+| recogniser  | no          | isa/rules/tritonflow2.py:88 (stride-1 assumed)  |
 | assembler   | yes         | –                                           |
 edits outside schema and rules: ["recognize/walk.py:112"]   transfer rate: 0.86
 ```
@@ -108,9 +108,9 @@ edits outside schema and rules: ["recognize/walk.py:112"]   transfer rate: 0.86
 ## 5. The claim: a real PyTorch op on the generated device
 
 ```bash
-python -m triton_toyisa.cli serve &        # registers the backend and the DeviceInterface
+python -m triton_tritonflow.cli serve &        # registers the backend and the DeviceInterface
 python - <<'PY'
-import torch, triton_toyisa.torch_backend  # side-effect: registers "toyisa"
+import torch, triton_tritonflow.torch_backend  # side-effect: registers "tritonflow"
 x = torch.randn(64, 64); y = torch.randn(64, 64)
 f = torch.compile(lambda a, b: torch.relu(a @ b))
 out = f(x, y)

@@ -20,21 +20,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
-from rich.syntax import Syntax
-from rich.columns import Columns
-from rich.rule import Rule
 
-from triton_toyisa.extract.dynamic_extract import extract_matmul
-from triton_toyisa.ttir.to_ir import parse_module
-from triton_toyisa.ttir.graph import build_def_use
-from triton_toyisa.idioms.detect import annotate
-from triton_toyisa.emit.assemble import assemble
-from triton_toyisa.isa.schema import load_builtin
-
+from triton_tritonflow.emit.assemble import assemble
+from triton_tritonflow.extract.dynamic_extract import extract_matmul
+from triton_tritonflow.idioms.detect import annotate
+from triton_tritonflow.isa.schema import load_builtin
+from triton_tritonflow.ttir.graph import build_def_use
+from triton_tritonflow.ttir.to_ir import parse_module
 
 console = Console(width=110)
 
@@ -72,7 +71,7 @@ import torch
 a = torch.randn({m}, {k}, dtype=torch.float32)
 b = torch.randn({k}, {n}, dtype=torch.float32)
 
-@torch.compile(backend="toyisa")
+@torch.compile(backend="tritonflow")
 def matmul(x, y):
     return torch.matmul(x, y)  # ({m}x{k}) @ ({k}x{n}) -> ({m}x{n})
 
@@ -143,7 +142,7 @@ def stage_3_lowering_diff(ext, res, graph, ann):
     console.print(Rule("[bold yellow]STAGE 3: The Lowering Transformation Diff (Pre-ISA IR → Target ISAs)[/bold yellow]", style="yellow"))
     console.print("[dim italic]Showing how the abstract Triton-IR operations are transpiled into concrete hardware instructions across each ISA.[/dim italic]\n")
 
-    progs = {isa: assemble(res.module, graph, ann, load_builtin(isa), env=ext.env) for isa in ["toyisa1", "toyisa2", "vortex_rvgpu"]}
+    progs = {isa: assemble(res.module, graph, ann, load_builtin(isa), env=ext.env) for isa in ["tritonflow1", "tritonflow2", "vortex_rvgpu"]}
 
     # Unified Git-Style Diff for Vortex RVGPU
     vortex_diff = """--- Pre-ISA Abstract TTIR
@@ -197,10 +196,10 @@ def stage_3_lowering_diff(ext, res, graph, ann):
     diff_table.add_column("TOYISA2 (Banked)", style="blue", width=22)
     diff_table.add_column("VORTEX_RVGPU (SIMT)", style="bold green", width=24)
 
-    loop_len = len(progs["toyisa1"].loops[0].body) if progs["toyisa1"].loops else 0
+    loop_len = len(progs["tritonflow1"].loops[0].body) if progs["tritonflow1"].loops else 0
     for i in range(min(loop_len, 8)):
-        t1_inst = progs["toyisa1"].loops[0].body[i]
-        t2_inst = progs["toyisa2"].loops[0].body[i]
+        t1_inst = progs["tritonflow1"].loops[0].body[i]
+        t2_inst = progs["tritonflow2"].loops[0].body[i]
         vx_inst = progs["vortex_rvgpu"].loops[0].body[i]
         src_op = t1_inst.source.op_name if t1_inst.source else "unknown"
 
@@ -232,7 +231,7 @@ def stage_4_3way_isa_diff(ext, res, graph, ann):
 
     progs = {}
     schemas = {}
-    for isa in ["toyisa1", "toyisa2", "vortex_rvgpu"]:
+    for isa in ["tritonflow1", "tritonflow2", "vortex_rvgpu"]:
         schemas[isa] = load_builtin(isa)
         progs[isa] = assemble(res.module, graph, ann, schemas[isa], env=ext.env)
 
@@ -274,14 +273,14 @@ def stage_4_3way_isa_diff(ext, res, graph, ann):
     )
     matrix.add_row(
         "Compute Instruction Cost",
-        f"358.4 cycles / tile",
-        f"70.4 cycles / tile",
-        f"[bold green]19.2 cycles / tile (18.6× faster)[/bold green]",
+        "358.4 cycles / tile",
+        "70.4 cycles / tile",
+        "[bold green]19.2 cycles / tile (18.6× faster)[/bold green]",
     )
     matrix.add_row(
         "Total Kernel Cost",
-        f"{progs['toyisa1'].total_cost:.1f} cycles",
-        f"{progs['toyisa2'].total_cost:.1f} cycles",
+        f"{progs['tritonflow1'].total_cost:.1f} cycles",
+        f"{progs['tritonflow2'].total_cost:.1f} cycles",
         f"[bold green]{progs['vortex_rvgpu'].total_cost:.1f} cycles (5.2× speedup)[/bold green]",
     )
 

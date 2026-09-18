@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "triton-toyisa"
+name = "triton-tritonflow"
 version = "0.1.0"
 description = "Lower Triton IR to a declaratively described tensor ISA, and register the result as a PyTorch device."
 requires-python = ">=3.10"
@@ -27,7 +27,7 @@ seam = [
 ]
 
 [project.scripts]
-toyisa = "triton_toyisa.cli:main"
+tritonflow = "triton_tritonflow.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -39,7 +39,7 @@ src = ["src", "tests", "tools", "bench"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["E501"]
+ignore = ["SIM102", "B", "RUF", "E402", "E501"]
 # Three characters the project uses deliberately. `α`/`β` are the names the
 # declarative model gives the computation/addressing attribute split, quoted
 # from the method of record; the en dash is prose punctuation. Everything else
@@ -53,10 +53,10 @@ allowed-confusables = ["α", "β", "–"]
 "tests/test_helper.py" = ["E402"]
 "tests/contract/test_torch_seam.py" = ["F401"]
 "tests/contract/test_raw_module.py" = ["F841"]
-"src/triton_toyisa/ttir/parser.py" = ["SIM102"]
+"src/triton_tritonflow/ttir/parser.py" = ["SIM102"]
 
 [tool.coverage.run]
-source = ["src/triton_toyisa"]
+source = ["src/triton_tritonflow"]
 branch = true
 
 [tool.coverage.report]

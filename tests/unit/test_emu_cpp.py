@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from triton_toyisa.emit.ir import (
+from triton_tritonflow.emit.ir import (
     Imm,
     Instr,
     Loop,
@@ -13,19 +13,26 @@ from triton_toyisa.emit.ir import (
     SsaRef,
     UnsupportedMarker,
 )
-from triton_toyisa.emu import HAS_CPP
-from triton_toyisa.emu.exec import emulate
-from triton_toyisa.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
+from triton_tritonflow.emu import HAS_CPP
+from triton_tritonflow.emu.exec import emulate
+from triton_tritonflow.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
 
 if not HAS_CPP:
-    pytest.skip("C++ backend is not installed", allow_module_level=True)
+    import unittest
+    raise unittest.SkipTest("C++ backend is not installed")
 
-from triton_toyisa.emu._emu_cpp import (
+from triton_tritonflow.emu._emu_cpp import (
     PrecisionPolicy as CppPrecisionPolicy,
-    derive_tolerance as cpp_derive_tolerance,
-    tf32_truncate as cpp_tf32_truncate,
+)
+from triton_tritonflow.emu._emu_cpp import (
     ProgramNotExecutable,
     UnsupportedInstruction,
+)
+from triton_tritonflow.emu._emu_cpp import (
+    derive_tolerance as cpp_derive_tolerance,
+)
+from triton_tritonflow.emu._emu_cpp import (
+    tf32_truncate as cpp_tf32_truncate,
 )
 
 
@@ -69,7 +76,7 @@ def test_elementwise_addi():
     """Test a basic elementwise operation in the C++ emulator."""
     # Minimal program: arith.addi on two scalar inputs, then store
     prog = Program(
-        isa_name="toyisa",
+        isa_name="tritonflow",
         schema_version=1,
         inputs=("A", "B", "Out"),
         instrs=(
@@ -106,7 +113,7 @@ def test_elementwise_addi():
 def test_loop():
     """Test loop execution in the C++ emulator."""
     prog = Program(
-        isa_name="toyisa",
+        isa_name="tritonflow",
         schema_version=1,
         inputs=("lower", "upper", "step", "init", "Out"),
         loops=(
@@ -156,7 +163,7 @@ def test_loop():
 def test_program_id():
     """Test get_program_id with grid parameters in the C++ emulator."""
     prog = Program(
-        isa_name="toyisa",
+        isa_name="tritonflow",
         schema_version=1,
         inputs=("OutX", "OutY"),
         instrs=(
@@ -205,7 +212,7 @@ def test_program_id():
 def test_exceptions():
     """Test that unsupported ops raise UnsupportedInstruction, and markers raise ProgramNotExecutable."""
     prog_invalid_op = Program(
-        isa_name="toyisa",
+        isa_name="tritonflow",
         schema_version=1,
         inputs=("Out",),
         instrs=(
@@ -224,7 +231,7 @@ def test_exceptions():
         emulate(prog_invalid_op, inputs, use_cpp=True)
 
     prog_with_marker = Program(
-        isa_name="toyisa",
+        isa_name="tritonflow",
         schema_version=1,
         inputs=("Out",),
         instrs=(),

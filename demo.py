@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 # Setup paths
@@ -17,22 +16,17 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "triton-generator-merge" / "src"))
 
-import numpy as np
 import torch
 import torch._dynamo
 import torch.nn as nn
 
-from triton_toyisa.emit.assemble import assemble
-from triton_toyisa.emit.disasm import disassemble
-from triton_toyisa.emu.exec import emulate
-from triton_toyisa.emu.precision import PrecisionPolicy
-from triton_toyisa.extract.dynamic_extract import extract_matmul, is_triton_available
-from triton_toyisa.idioms.detect import annotate
-from triton_toyisa.isa.schema import load_builtin
-from triton_toyisa.lower import lower_fixture
-from triton_toyisa.torch_backend.compiler import toyisa_backend
-from triton_toyisa.ttir.graph import build_def_use
-from triton_toyisa.ttir.to_ir import parse_module
+from triton_tritonflow.emit.assemble import assemble
+from triton_tritonflow.extract.dynamic_extract import extract_matmul
+from triton_tritonflow.idioms.detect import annotate
+from triton_tritonflow.isa.schema import load_builtin
+from triton_tritonflow.torch_backend.compiler import tritonflow_backend
+from triton_tritonflow.ttir.graph import build_def_use
+from triton_tritonflow.ttir.to_ir import parse_module
 
 # ANSI Colors for Rich Terminal Display
 CYAN = "\033[96m"
@@ -70,7 +64,7 @@ def demo_1_multi_isa():
 
     print(f"{YELLOW}{BOLD}▶ Step 1: Standard PyTorch Operation{RESET}")
     print(f"   {GREEN}torch.matmul(A: (128, 64), B: (64, 128)){RESET}")
-    print(f"   Target compute: Matrix Multiply with Tiling BLOCK=(64, 64, 32)\n")
+    print("   Target compute: Matrix Multiply with Tiling BLOCK=(64, 64, 32)\n")
 
     print(f"{YELLOW}{BOLD}▶ Step 2: Extracted Triton MLIR (Generic Block-Level IR){RESET}")
     ext = extract_matmul(128, 128, 64)
@@ -85,8 +79,8 @@ def demo_1_multi_isa():
     ann = annotate(res.module, graph)
 
     targets = [
-        ("toyisa1", "Scratchpad ASIC", "DMA1D + MAC16 (16×16 systolic array) + EPI"),
-        ("toyisa2", "Banked Memory ASIC", "LDG + OPU32 (32×32 outer-product unit) + VPU"),
+        ("tritonflow1", "Scratchpad ASIC", "DMA1D + MAC16 (16×16 systolic array) + EPI"),
+        ("tritonflow2", "Banked Memory ASIC", "LDG + OPU32 (32×32 outer-product unit) + VPU"),
         ("vortex_rvgpu", "RISC-V SIMT GPGPU", "LDG + TCU_MMA16 (Tensor Core) + VADD/VMUL"),
     ]
 
@@ -117,12 +111,12 @@ def demo_2_schema_contract():
         "Hardware engineers write YAML schemas; our compiler auto-derives the backend",
     )
 
-    schema_file = ROOT / "src" / "triton_toyisa" / "isa" / "schemas" / "toyisa1.yaml"
+    schema_file = ROOT / "src" / "triton_tritonflow" / "isa" / "schemas" / "tritonflow1.yaml"
     if not schema_file.exists():
-        schema_file = ROOT / "triton-generator-merge" / "src" / "triton_toyisa" / "isa" / "schemas" / "toyisa1.yaml"
+        schema_file = ROOT / "triton-generator-merge" / "src" / "triton_tritonflow" / "isa" / "schemas" / "tritonflow1.yaml"
 
     print(f"{YELLOW}{BOLD}▶ Inspecting Schema: {schema_file.name}{RESET}")
-    print(f"   This 50-line YAML file IS the accelerator specification. Here is the TCU definition:\n")
+    print("   This 50-line YAML file IS the accelerator specification. Here is the TCU definition:\n")
 
     sample_yaml = """
   MAC16:
@@ -166,8 +160,8 @@ def demo_3_arbitrary_shapes():
 
         plan_holder = []
         def capture_plan(gm, inputs):
-            fn = toyisa_backend(gm, inputs)
-            plan_holder.append(getattr(fn, "toyisa_plan", None))
+            fn = tritonflow_backend(gm, inputs)
+            plan_holder.append(getattr(fn, "tritonflow_plan", None))
             return fn
 
         compiled = torch.compile(lambda x, y: torch.matmul(x, y), backend=capture_plan)
@@ -178,7 +172,7 @@ def demo_3_arbitrary_shapes():
         diff = torch.max(torch.abs(out - ref)).item()
 
         status = f"{GREEN}PASS (Bit-Accurate){RESET}" if diff < 0.05 else f"{RED}FAIL{RESET}"
-        print(f"   • {BOLD}{str(s_a):12} @ {str(s_b):12}{RESET} → Out: {str(tuple(out.shape)):10} | Diff: {diff:.2e} | [{status}]")
+        print(f"   • {BOLD}{s_a!s:12} @ {s_b!s:12}{RESET} → Out: {tuple(out.shape)!s:10} | Diff: {diff:.2e} | [{status}]")
         print(f"     {DIM}↳ Kernel: {kernel.name if kernel else 'eager'} | Grid: {kernel.grid if kernel else 'N/A'} ({note}){RESET}")
 
     print(f"\n💡 {BOLD}Key Takeaway:{RESET} Dynamic shape padding, multi-tile grid dispatch, and output cropping are 100% automated.")
@@ -201,17 +195,17 @@ def demo_4_pytorch_integration():
     )
     print(f"{CYAN}{mlp}{RESET}\n")
 
-    print(f"{YELLOW}{BOLD}▶ Compiling with torch.compile(model, backend='toyisa')...{RESET}")
+    print(f"{YELLOW}{BOLD}▶ Compiling with torch.compile(model, backend='tritonflow')...{RESET}")
     torch._dynamo.reset()
-    opt_mlp = torch.compile(mlp, backend="toyisa")
+    opt_mlp = torch.compile(mlp, backend="tritonflow")
 
     x = torch.randn(16, 64)
     ref_y = mlp(x)
     toy_y = opt_mlp(x)
 
     diff = torch.max(torch.abs(toy_y - ref_y)).item()
-    print(f"   ✔ PyTorch Graph Captured & Traversed by ToyISA Interpreter")
-    print(f"   ✔ Linear Layers Lowered to Accelerator MAC/DMA Units")
+    print("   ✔ PyTorch Graph Captured & Traversed by TritonFlow Interpreter")
+    print("   ✔ Linear Layers Lowered to Accelerator MAC/DMA Units")
     print(f"   ✔ Output Shape: {tuple(toy_y.shape)}")
     print(f"   ✔ Max Absolute Difference vs Eager: {GREEN}{diff:.6e}{RESET}")
     print(f"   ✔ Numerical Parity: {GREEN}{BOLD}PASS (100% Verified){RESET}\n")
@@ -236,14 +230,14 @@ def demo_5_negative_control():
     res = parse_module(fixture_path.read_text())
     graph = build_def_use(res.module)
     ann = annotate(res.module, graph)
-    schema = load_builtin("toyisa1")
+    schema = load_builtin("tritonflow1")
     prog = assemble(res.module, graph, ann, schema, env={"n": 1024})
     markers = prog.markers()
 
     print(f"   • Program Carries UNSUPPORTED Markers: {BOLD}{len(markers)}{RESET}")
     for m in markers:
         print(f"     {RED}↳ [{m.kind}] {m.op_name} at {m.loc_name or "?"}: {m.reason}{RESET}")
-    print(f"   • Fallback Route: Safe execution on eager PyTorch with explicit FallbackRecord")
+    print("   • Fallback Route: Safe execution on eager PyTorch with explicit FallbackRecord")
     print(f"   • Silent Miscompilation Risk: {GREEN}0.0% (Fail-Closed Mathematical Guarantee){RESET}\n")
 
     print(f"💡 {BOLD}Key Takeaway:{RESET} We never silently guess or emit bad code. If a chip cannot run it, the compiler states why.")

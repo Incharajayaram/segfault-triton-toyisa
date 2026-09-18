@@ -15,16 +15,16 @@ The largest track, and the one with the two things that make the project mean an
 ## You own
 
 ```
-src/triton_toyisa/isa/schema.py             IsaSchema, Instruction, load_schema, validate_schema, evaluate, cost_of
-src/triton_toyisa/isa/select.py             Candidate, SelectionReport, enumerate_candidates, select, oracle_min
-src/triton_toyisa/isa/rules/toyisa1.py      ISA_RULES
-src/triton_toyisa/isa/rules/toyisa2.py      ISA_RULES (authored independently — see day 4)
-src/triton_toyisa/isa/schemas/*.yaml
-src/triton_toyisa/torch_backend/compiler.py           toyisa_backend, extract_ttir, lower_and_run, fallback
-src/triton_toyisa/torch_backend/device_interface.py   ToyIsaInterface, register_interface
-src/triton_toyisa/torch_backend/device.py             ToyDevice, DevicePtr
-src/triton_toyisa/emu/exec.py                         emulate, apply, ProgramNotExecutable, ShapeMismatch
-src/triton_toyisa/emu/precision.py                    PrecisionPolicy, derive_tolerance, tf32_truncate, accumulate, compare
+src/triton_tritonflow/isa/schema.py             IsaSchema, Instruction, load_schema, validate_schema, evaluate, cost_of
+src/triton_tritonflow/isa/select.py             Candidate, SelectionReport, enumerate_candidates, select, oracle_min
+src/triton_tritonflow/isa/rules/tritonflow1.py      ISA_RULES
+src/triton_tritonflow/isa/rules/tritonflow2.py      ISA_RULES (authored independently — see day 4)
+src/triton_tritonflow/isa/schemas/*.yaml
+src/triton_tritonflow/torch_backend/compiler.py           tritonflow_backend, extract_ttir, lower_and_run, fallback
+src/triton_tritonflow/torch_backend/device_interface.py   ToyIsaInterface, register_interface
+src/triton_tritonflow/torch_backend/device.py             ToyDevice, DevicePtr
+src/triton_tritonflow/emu/exec.py                         emulate, apply, ProgramNotExecutable, ShapeMismatch
+src/triton_tritonflow/emu/precision.py                    PrecisionPolicy, derive_tolerance, tf32_truncate, accumulate, compare
 ```
 
 **Your contracts**: `contracts/isa-schema.md`, `contracts/selector.md`, `contracts/torch-seam.md`,
@@ -40,7 +40,7 @@ contract. You keep the smoke test because it is the proof of your track.
 You are the only track that can start at full speed with nothing from anyone, *and* the only one that can
 produce a result nobody can argue with on day 1. Order:
 
-1. **`toyisa1.yaml`** — it is written out in full in `data-model.md` §1.1 (DMA1D, DMA2D, MAC8, MAC16, EPI, with
+1. **`tritonflow1.yaml`** — it is written out in full in `data-model.md` §1.1 (DMA1D, DMA2D, MAC8, MAC16, EPI, with
    constraints and costs). Then the predicate language, `validate_schema`, `evaluate` (fail-closed),
    `cost_of` (zero-dimension guard), `select`/`enumerate_candidates`.
 2. **Test the selector with hand-built descriptors.** A descriptor is a plain dataclass; C freezes it at lunch.
@@ -68,10 +68,10 @@ table. The fallback test is the one that matters most: an unlowerable op must ru
 
 ## Day 4 — ISA-2 and the reports
 
-- `toyisa2.yaml`: scratchpad + accumulator banks, an outer-product/conv unit, strided 2-D DMA with an explicit
+- `tritonflow2.yaml`: scratchpad + accumulator banks, an outer-product/conv unit, strided 2-D DMA with an explicit
   offset pair, a `CLAMP` epilogue, and a **different** accumulation order (`k_blocked(4)`). The table is in
   `data-model.md` §1.3.
-- `isa/rules/toyisa2.py`: **author it without opening `isa/rules/toyisa1.py`.** That is not style — it is the
+- `isa/rules/tritonflow2.py`: **author it without opening `isa/rules/tritonflow1.py`.** That is not style — it is the
   validity condition of the experiment. Put it in the commit message. Then hand B every edit you were forced
   to make outside `isa/schemas/` and `isa/rules/`; that list, not the percentage, is the result.
 - Coverage and transfer tables (C and B own those files), then the write-up reads them. No number typed by hand.
@@ -79,8 +79,8 @@ table. The fallback test is the one that matters most: an unlowerable op must ru
 ## Definition of done
 
 - [ ] Day-1 smoke test green: a real `torch` op compiles and runs on the registered device
-- [ ] Device visible: `device_count`, `is_available`, `current_device`/`set_device` round-trip, `.to("toyisa")`
-- [ ] `toyisa1.yaml` validates; six broken schemas each produce their specific violation
+- [ ] Device visible: `device_count`, `is_available`, `current_device`/`set_device` round-trip, `.to("tritonflow")`
+- [ ] `tritonflow1.yaml` validates; six broken schemas each produce their specific violation
 - [ ] Both DMA admissible → `DMA2D` chosen with `DMA1D`'s rejection reason recorded; stride not divisible by 4 →
       `DMA1D`; `m % 16 != 0` → `MAC8`; 64×64×32 → `MAC16`
 - [ ] Nothing admissible → `no_admissible_lowering` → `UNSUPPORTED`, **never a default instruction**

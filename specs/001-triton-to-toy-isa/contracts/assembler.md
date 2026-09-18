@@ -1,6 +1,6 @@
 # Contract: assembler and serialiser
 
-**Module**: `src/triton_toyisa/emit/` (`ir.py`, `assemble.py`, `disasm.py`)
+**Module**: `src/triton_tritonflow/emit/` (`ir.py`, `assemble.py`, `disasm.py`)
 **Consumers**: the emulator and the PyTorch seam. **Requirements**: FR-019, FR-020, FR-005.
 
 ## Interface
