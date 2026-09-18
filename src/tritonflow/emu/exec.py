@@ -189,6 +189,7 @@ class MachineState:
     values: dict[str, Any] = field(default_factory=dict)
     written: set[str] = field(default_factory=set)
     grid: tuple[int, ...] = (0, 0, 0)
+    loop_iteration: int = 0
 
     # -- construction ------------------------------------------------------- #
 
@@ -199,6 +200,7 @@ class MachineState:
         inputs: dict[str, np.ndarray],
         policy: PrecisionPolicy | None = None,
         grid: tuple[int, ...] = (0, 0, 0),
+        loop_iteration: int = 0,
     ) -> MachineState:
         policy = policy or PrecisionPolicy()
         pointers = _pointer_inputs(program)
@@ -248,14 +250,70 @@ class MachineState:
                 "with no producer is an unexecutable program, not a zero"
             )
         if isinstance(operand, MemRef):
-            storage = self.address_of(operand.base)
-            if storage is not None:
-                return storage.base + np.arange(storage.length)
-            return self.resolve(SsaRef(operand.base))
+            return self._resolve_memref(operand)
         raise TypeError(f"cannot resolve operand {operand!r}")
 
     def bind(self, name: str, value: Any) -> None:
         self.values[name] = value
+
+
+    def _materialize_descriptor(self, memref: "MemRef", base: int) -> np.ndarray:
+        from tritonflow.emu.exec import _descriptor_fields
+        fields = _descriptor_fields(memref.access_key)
+        raw_sizes = fields.get("sizes", "[]").strip("[]").strip()
+        sizes = tuple(int(s) for s in raw_sizes.split(",") if s.strip()) if raw_sizes else ()
+
+        raw_strides = fields.get("strides", "[]").strip("[]").strip()
+        strides = []
+        for s in (raw_strides.split(",") if raw_strides else []):
+            s = s.strip()
+            if not s: continue
+            try:
+                strides.append(int(s))
+            except ValueError:
+                if s in self.values:
+                    strides.append(int(np.asarray(self.values[s]).item()))
+                else:
+                    strides.append(1)
+        strides = tuple(strides)
+
+        raw_offsets = fields.get("offsets", "[]").strip("[]").strip()
+        offsets = []
+        for o in (raw_offsets.split(",") if raw_offsets else []):
+            o = o.strip()
+            try:
+                offsets.append(int(o))
+            except ValueError:
+                offsets.append(0)
+
+        is_loop_carried = fields.get("loop_carried", "False") == "True"
+        raw_inc = fields.get("increment", "0")
+        inc = 0
+        try:
+            inc = int(raw_inc)
+        except ValueError:
+            if raw_inc in self.values:
+                inc = int(np.asarray(self.values[raw_inc]).item())
+                
+        loop_offset = self.loop_iteration * inc if is_loop_carried else 0
+
+        if not sizes:
+            return np.array([base], dtype=np.int64)
+
+        coords = np.indices(sizes, dtype=np.int64)
+        addresses = np.full(sizes, base + loop_offset, dtype=np.int64)
+        for dim in range(len(sizes)):
+            off = offsets[dim] if dim < len(offsets) else 0
+            stride = strides[dim] if dim < len(strides) else 1
+            addresses += coords[dim] * stride + off
+        return addresses
+
+    def _resolve_memref(self, memref: "MemRef") -> np.ndarray:
+        value = self.resolve(SsaRef(memref.base))
+        arr = np.asarray(value, dtype=np.int64)
+        if arr.ndim > 0:
+            return arr
+        return self._materialize_descriptor(memref, int(arr))
 
     def address_of(self, name: str) -> Storage | None:
         for storage in self.storages.values():
@@ -347,8 +405,10 @@ def _sizes(key: str | None) -> tuple[int, ...]:
 
 
 def _declared_shape(instr: Instr) -> tuple[int, ...]:
-    """The shape the emitter recorded for this instruction's result."""
-    return _sizes(instr.constrained_on)
+    for operand in instr.operands.values():
+        if isinstance(operand, MemRef):
+            return _sizes(operand.access_key)
+    return ()
 
 
 def _pointer_inputs(program: Program) -> set[str]:
@@ -790,7 +850,9 @@ def run_loop(loop: Loop, state: MachineState, policy: PrecisionPolicy) -> None:
     lower, upper, step = _loop_bounds(loop, state)
     index = lower
     guard = (upper - lower) // step + 2
+    iteration = 0
     while index < upper:
+        state.loop_iteration = iteration
         guard -= 1
         if guard < 0:
             raise StorageError(f"loop {loop.id} did not terminate; refusing to spin")
@@ -804,6 +866,7 @@ def run_loop(loop: Loop, state: MachineState, policy: PrecisionPolicy) -> None:
             for name, value in zip(loop.iter_args, advanced, strict=True):
                 state.bind(name, value)
         index += step
+        iteration += 1
 
     for result, name in zip(loop.results, loop.iter_args, strict=False):
         state.bind(result, state.values.get(name))
@@ -815,6 +878,7 @@ def emulate(
     policy: PrecisionPolicy | None = None,
     *,
     grid: tuple[int, ...] = (0, 0, 0),
+    loop_iteration: int = 0,
     use_cpp: bool = False,
 ) -> dict[str, np.ndarray]:
     if use_cpp:

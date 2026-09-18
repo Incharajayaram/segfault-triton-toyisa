@@ -336,24 +336,35 @@ def find_subsumed_address_ops(module: Module, graph: DefUseGraph, space: str = D
         elif mem_op.name == shapes.STORE and len(mem_op.operands) > 2:
             trace(mem_op.operands[2])
 
-    def is_consumed_by_compute(op):
-        for r in op.results:
-            for user in graph.uses.get(r.name, ()):
-                if id(user) in addr_producer_ids:
-                    continue
-                if shapes.is_memory_op(user):
-                    val_op = shapes.value_operand(user)
-                    if val_op is not None and val_op.name == r.name:
-                        return True
-                    continue
-                if user.name not in ("scf.yield", "tt.return"):
-                    return True
-        return False
+# To correctly handle shared paths where one branch is subsumed and another is not,
+    # we start with all addr_producer_ids, then remove any op that has a user NOT in subsumed_ids
+    # (unless that user is a memory op reading this as the value to store).
+    subsumed_ids = set(addr_producer_ids)
+    changed = True
+    while changed:
+        changed = False
+        for op in graph.operations:
+            if id(op) not in subsumed_ids:
+                continue
+            is_consumed_by_live = False
+            for r in op.results:
+                for user in graph.uses.get(r.name, ()):
+                    if id(user) in subsumed_ids:
+                        continue
+                    if shapes.is_memory_op(user):
+                        val_op = shapes.value_operand(user)
+                        if val_op is not None and val_op.name == r.name:
+                            is_consumed_by_live = True
+                            break
+                    else:
+                        is_consumed_by_live = True
+                        break
+                if is_consumed_by_live:
+                    break
+            if is_consumed_by_live:
+                subsumed_ids.remove(id(op))
+                changed = True
 
-    subsumed_ids = set()
-    for op in graph.operations:
-        if id(op) in addr_producer_ids and not is_consumed_by_compute(op):
-            subsumed_ids.add(id(op))
     return subsumed_ids
 
 
@@ -365,7 +376,7 @@ def annotate(
     select_here: bool = False,
     unsafe: tuple[str, ...] = (),
     space: str = DEFAULT_SPACE,
-    elide_address_math: bool = False,
+    elide_address_math: bool = True,
 ) -> AnnotationSet:
     """Every operation of `module` → its binding, or its explicit refusal.
 

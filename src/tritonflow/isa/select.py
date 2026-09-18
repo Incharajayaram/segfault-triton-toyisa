@@ -95,15 +95,22 @@ def enumerate_candidates(
         verdict = evaluate(reason_of(instruction), descriptor, tile, env)
         reason: str | None = None
 
+        if kind == "elementwise" and getattr(instruction, "ops", None) and instruction.name not in ("EPI", "VPU"):
+            # The source op name is passed as the descriptor for compute ops, or as descriptor.base
+            op_name = getattr(descriptor, "base", descriptor)
+            if op_name and isinstance(op_name, str) and not op_name.startswith("%"):
+                if not any(_matches_op(entry, op_name) for entry in instruction.ops):
+                    out.append(
+                        Candidate(
+                            instruction,
+                            False,
+                            f"op mismatch: {op_name} not in {list(instruction.ops)}",
+                            None,
+                        )
+                    )
+                    continue
+
         if verdict is True:
-            # For elementwise instructions that declare specific opcodes,
-            # ensure the instruction matches the target operation opcode.
-            if kind == "elementwise" and getattr(instruction, "ops", None) and instruction.name not in ("EPI", "VPU"):
-                base_op = getattr(descriptor, "base", None)
-                if base_op and isinstance(base_op, str) and not base_op.startswith("%"):
-                    if not any(_matches_op(entry, base_op) for entry in instruction.ops):
-                        verdict = False
-                        reason = f"op mismatch: {base_op} not in {list(instruction.ops)}"
 
             # Enforce sparse data precondition: if the instruction requires sparse execution,
             # input descriptor or env must declare sparse format/metadata.
