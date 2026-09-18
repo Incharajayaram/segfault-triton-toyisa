@@ -387,6 +387,9 @@ def assemble(
             producers=producers,
             env=env,
         )
+        if emitted is None:
+            available.update(value.name for value in op.results)
+            continue
         if isinstance(emitted, UnsupportedMarker):
             _place(emitted, item.loop_id, loop_bodies, unsupported)
             continue
@@ -463,6 +466,9 @@ def _emit_checked(
             "silently dropping the others is a decision nobody made"
         )
     binding = bindings[0] if bindings else None
+    if binding is not None and getattr(binding, "subsumed", False):
+        _record(report, op, None, "subsumed into structured memory access descriptor", loop_id)
+        return None
     binding, selection = _select(selector, schema, op, binding, env)
     if binding is not None and binding.instruction is not None:
         unavailable = _unavailable(binding, available, producers or {})
@@ -606,8 +612,9 @@ def _select(
             "selector=... or have the annotation name its instruction — a missing stage "
             "is not the target ISA's limitation, so it must not be reported as one"
         )
+    direction = "store" if op.name == "tt.store" else ("load" if op.name == "tt.load" else None)
     selection = _call_selector(
-        selector, schema, binding.kind, binding.descriptor, binding.tile, env
+        selector, schema, binding.kind, binding.descriptor, binding.tile, env, direction=direction
     )
     # `aligned(X, k)` decides against the ACTIVE machine's allocator promise:
     # selection is per-schema, and a second machine may promise differently.
@@ -689,19 +696,18 @@ def _call_selector(
     descriptor: object,
     tile: tuple[int, ...] | None,
     env: dict[str, int] | None,
+    direction: str | None = None,
 ) -> object:
-    """Call the selector with the arguments its signature accepts.
-
-    The real `isa.select.select` takes the launch environment; the frozen
-    stand-in (`qc.standin.MinCostSelector`) predates it and would raise a
-    TypeError if handed one. Arity, not isinstance: the protocol is "callable
-    taking (schema, kind, descriptor, tile[, env])", and the caller decides by
-    signature, so neither side needs to know the other exists.
-    """
+    """Call the selector with the arguments its signature accepts."""
     args = (schema, kind, descriptor, tile, env)
     limit = _positional_arity(selector)
+    if direction is not None and limit is not None and limit >= 6:
+        return selector(schema, kind, descriptor, tile, env, direction)
     if limit is None or limit >= len(args):
-        return selector(*args)
+        try:
+            return selector(*args, direction=direction)
+        except TypeError:
+            return selector(*args)
     return selector(*args[:limit])
 
 

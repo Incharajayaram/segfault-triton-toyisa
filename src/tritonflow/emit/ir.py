@@ -253,6 +253,9 @@ class Binding:
     reason: str | None = None
     """Why this is unsupported, when it is. Never empty by accident: an
     `UNSUPPORTED` marker with no reason is a dropped operation wearing a hat."""
+    subsumed: bool = False
+    """True if this operation is subsumed by a structured memory descriptor."""
+
 
 
 @dataclass(frozen=True)

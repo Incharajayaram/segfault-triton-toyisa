@@ -94,6 +94,7 @@ instructions:
   - name: LDG
     kind: memory
     rule: memory
+    direction: load
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
     cost: {expr: "0.50 * words", unit: word}
@@ -103,6 +104,7 @@ instructions:
   - name: STG
     kind: memory
     rule: memory
+    direction: store
     addressing: {form: coalesced_global, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 2.0", unit: word}
     cost: {expr: "0.50 * words", unit: word}
@@ -112,6 +114,7 @@ instructions:
   - name: LDS
     kind: memory
     rule: memory
+    direction: load
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}
@@ -121,6 +124,7 @@ instructions:
   - name: STS
     kind: memory
     rule: memory
+    direction: store
     addressing: {form: banked_scratchpad, fields: [base, sizes, strides, offsets]}
     time: {expr: "words / 8.0", unit: word}
     cost: {expr: "0.10 * words", unit: word}

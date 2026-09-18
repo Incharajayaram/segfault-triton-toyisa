@@ -105,6 +105,25 @@ def enumerate_candidates(
                         verdict = False
                         reason = f"op mismatch: {base_op} not in {list(instruction.ops)}"
 
+            # Enforce sparse data precondition: if the instruction requires sparse execution,
+            # input descriptor or env must declare sparse format/metadata.
+            if verdict is True and getattr(instruction, "sparse", False):
+                desc_sparse = bool(getattr(descriptor, "sparse", False))
+                env_sparse = bool(env and env.get("sparse", False))
+                if not (desc_sparse or env_sparse):
+                    verdict = False
+                    reason = "sparse data precondition not met: input tensor is dense"
+
+            # Enforce format precondition (e.g. microscaling MXFP8/NVFP4):
+            if verdict is True and getattr(instruction, "format", None):
+                fmt = instruction.format.lower()
+                desc_dtype = str(getattr(descriptor, "dtype", "")).lower().replace("!", "")
+                desc_fmt = str(getattr(descriptor, "format", "")).lower()
+                env_fmt = str(env.get("format", "")).lower() if env else ""
+                if fmt not in (desc_dtype, desc_fmt, env_fmt):
+                    verdict = False
+                    reason = f"format precondition not met: requires {instruction.format}"
+
         if verdict is True:
             cost: float | None = cost_of(instruction, descriptor, tile, env)
             out.append(Candidate(instruction, True, None, cost))

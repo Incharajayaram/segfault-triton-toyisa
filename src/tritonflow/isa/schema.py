@@ -1020,6 +1020,12 @@ class Instruction:
     metadata_req: str | None = None
     encoding: dict[str, Any] | None = None
     backend: str | None = None
+    direction: str | None = None
+
+    def serves(self, direction: str | None) -> bool:
+        if direction is None or self.direction is None:
+            return True
+        return self.direction.lower() == direction.lower()
 
     def admissible_for(
         self,
@@ -1216,6 +1222,7 @@ def _build(raw: dict[str, Any], source: str) -> IsaSchema:
             metadata_req=entry.get("metadata_req"),
             encoding=dict(encoding_raw) if isinstance(encoding_raw, dict) else None,
             backend=entry.get("backend"),
+            direction=entry.get("direction"),
         )
 
     csr_regs: dict[str, int] = {}

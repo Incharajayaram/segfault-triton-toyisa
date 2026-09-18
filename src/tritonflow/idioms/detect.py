@@ -303,6 +303,60 @@ class AnnotationSet:
         )
 
 
+
+def find_subsumed_address_ops(module: Module, graph: DefUseGraph, space: str = DEFAULT_SPACE) -> set[int]:
+    """Find operations whose computations are fully subsumed into structured memory descriptors."""
+    structured_mem_ops = []
+    for op in graph.operations:
+        if shapes.is_memory_op(op):
+            ptr = shapes.pointer_operand(op)
+            if ptr is not None:
+                res = describe(ptr, (space,), graph)
+                if isinstance(res, Ok):
+                    structured_mem_ops.append(op)
+
+    addr_producer_ids = set()
+    def trace(val):
+        if val is None:
+            return
+        op = val.def_op
+        if op is None or id(op) in addr_producer_ids:
+            return
+        if shapes.is_memory_op(op) or shapes.is_dot(op):
+            return
+        addr_producer_ids.add(id(op))
+        for operand in op.operands:
+            trace(operand)
+
+    for mem_op in structured_mem_ops:
+        ptr = shapes.pointer_operand(mem_op)
+        trace(ptr)
+        if mem_op.name == shapes.LOAD and len(mem_op.operands) > 1:
+            trace(mem_op.operands[1])
+        elif mem_op.name == shapes.STORE and len(mem_op.operands) > 2:
+            trace(mem_op.operands[2])
+
+    def is_consumed_by_compute(op):
+        for r in op.results:
+            for user in graph.uses.get(r.name, ()):
+                if id(user) in addr_producer_ids:
+                    continue
+                if shapes.is_memory_op(user):
+                    val_op = shapes.value_operand(user)
+                    if val_op is not None and val_op.name == r.name:
+                        return True
+                    continue
+                if user.name not in ("scf.yield", "tt.return"):
+                    return True
+        return False
+
+    subsumed_ids = set()
+    for op in graph.operations:
+        if id(op) in addr_producer_ids and not is_consumed_by_compute(op):
+            subsumed_ids.add(id(op))
+    return subsumed_ids
+
+
 def annotate(
     module: Module,
     graph: DefUseGraph | None = None,
@@ -311,6 +365,7 @@ def annotate(
     select_here: bool = False,
     unsafe: tuple[str, ...] = (),
     space: str = DEFAULT_SPACE,
+    elide_address_math: bool = False,
 ) -> AnnotationSet:
     """Every operation of `module` → its binding, or its explicit refusal.
 
@@ -330,14 +385,26 @@ def annotate(
     rules = dict(instruction_for or {})
     unsafe_set = frozenset(unsafe)
 
+    subsumed_ids = find_subsumed_address_ops(module, graph, space) if elide_address_math else set()
+
     for op in walk_region(module.body):
         if op.name in unsafe_set:
             unsupported.append(op.name)
             continue
-        binding = _binding_for(op, graph, rules, select_here, space)
+        binding = _binding_for(op, graph, rules, select_here, space, subsumed_ids)
         if binding is None:
             unsupported.append(op.name)
             continue
+        if id(op) in subsumed_ids:
+            binding = Binding(
+                instruction=None,
+                kind=binding.kind,
+                operands=binding.operands,
+                defs=binding.defs,
+                descriptor=binding.descriptor,
+                tile=binding.tile,
+                subsumed=True,
+            )
         if binding.reason:
             refusals.append((op.name, binding.reason))
         annotations.annotate(op, (binding,))
@@ -360,6 +427,7 @@ def _binding_for(
     rules: Mapping[str, str],
     select_here: bool,
     space: str,
+    subsumed_ids: set[int] | frozenset[int] = frozenset(),
 ) -> Binding | None:
     defs = tuple(value.name for value in op.results)
 
@@ -388,20 +456,17 @@ def _binding_for(
         descriptor: AccessDescriptor | None = result.descriptor
         if descriptor is None:  # pragma: no cover - Ok always carries one
             return None
+        base_name = descriptor.base if (subsumed_ids and descriptor.base) else pointer.name
         operands: dict[str, object] = {
-            "src" if op.name == shapes.LOAD else "dst": MemRef.of(space, pointer.name, descriptor),
+            "src" if op.name == shapes.LOAD else "dst": MemRef.of(space, base_name, descriptor),
         }
         value = shapes.value_operand(op)
         if value is not None:
             operands["value"] = _reference(value, graph)
         mask = _mask_operand(op)
         if mask is not None:
-            # A mask is not an operand the ISA-1 instruction set has; it is
-            # recorded as an *operands note* so it is visible in the report rather
-            # than dropped (EC-032). Dropping it silently would make a masked
-            # access and an unmasked one the same instruction — and the mask is
-            # exactly the operand that decides whether the result is right.
-            operands["mask"] = _reference(mask, graph)
+            if not (subsumed_ids and mask.def_op and id(mask.def_op) in subsumed_ids):
+                operands["mask"] = _reference(mask, graph)
         return Binding(
             instruction=_named(rules, RULE_MEMORY, select_here),
             kind=RULE_MEMORY,
@@ -618,4 +683,5 @@ __all__ = [
     "detect_all",
     "detect_epilogue",
     "detect_mac",
+    "find_subsumed_address_ops",
 ]
