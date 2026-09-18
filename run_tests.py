@@ -64,23 +64,23 @@ def main() -> int:
     suite = build_suite(suite_choice, pattern=args.pattern)
 
     count = suite.countTestCases()
-    print("============================================================")
+    print(f"============================================================")
     print(f"  triton_toyisa test runner (unittest) — {count} test cases")
     print(f"  Suite: {args.suite} | Pattern: {args.pattern}")
-    print("============================================================")
+    print(f"============================================================")
 
     start_time = time.perf_counter()
     runner = unittest.TextTestRunner(verbosity=2 if args.verbose else 1)
     result = runner.run(suite)
     elapsed = time.perf_counter() - start_time
 
-    print("\n------------------------------------------------------------")
+    print(f"\n------------------------------------------------------------")
     print(f"Ran {result.testsRun} tests in {elapsed:.3f}s")
     print(f"  Passed:   {result.testsRun - len(result.failures) - len(result.errors) - len(result.skipped)}")
     print(f"  Failed:   {len(result.failures)}")
     print(f"  Errors:   {len(result.errors)}")
     print(f"  Skipped:  {len(result.skipped)}")
-    print("------------------------------------------------------------")
+    print(f"------------------------------------------------------------")
 
     return 0 if result.wasSuccessful() else 1
 

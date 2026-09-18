@@ -1,6 +1,6 @@
 [build-system]
-requires = ["scikit-build-core>=0.9.0", "pybind11>=2.11", "cmake>=3.18", "ninja>=1.11; platform_system != 'Windows'"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "triton-toyisa"
@@ -13,12 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cpp = [
-  "pybind11>=2.11",
-]
 dev = [
-  "pytest>=8.0",
-  "pytest-cov>=5.0",
   "ruff>=0.6",
 ]
 # The only extra that needs Triton or torch. Kept separate so the test suite
@@ -34,25 +29,8 @@ seam = [
 [project.scripts]
 toyisa = "triton_toyisa.cli:main"
 
-[tool.scikit-build]
-wheel.packages = ["src/triton_toyisa"]
-# Explicit rather than relying on scikit-build-core's git-tracked-files default:
-# this repo is also distributed as a plain tarball (no `.git`), and the CMake
-# build needs these sources to be in the sdist regardless of VCS presence.
-sdist.include = [
-  "CMakeLists.txt",
-  "src/triton_toyisa/emu/cpp/*.cpp",
-  "src/triton_toyisa/emu/cpp/*.h",
-  "src/triton_toyisa/emu/cpp/CMakeLists.txt",
-]
-sdist.exclude = [
-  "build",
-  "dist",
-  "*.egg-info",
-  "__pycache__",
-  ".pytest_cache",
-  ".ruff_cache",
-]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100
@@ -76,12 +54,6 @@ allowed-confusables = ["α", "β", "–"]
 "tests/contract/test_torch_seam.py" = ["F401"]
 "tests/contract/test_raw_module.py" = ["F841"]
 "src/triton_toyisa/ttir/parser.py" = ["SIM102"]
-# Scripts that put the project on `sys.path` before importing from it. The
-# imports genuinely cannot precede that, so E402 here is the rule being wrong
-# about a standalone script rather than the script being wrong.
-"tools/demo_live.py" = ["E402"]
-"verify/verify_defuse_graph.py" = ["E402"]
-"verify/verify_end_to_end.py" = ["E402"]
 
 [tool.coverage.run]
 source = ["src/triton_toyisa"]
