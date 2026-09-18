@@ -963,7 +963,7 @@ disagree.
       such row into a hard failure. This is what makes four-way parallel work safe \emph{and} keeps the
       parallelism from becoming permanent.
 \item \textbf{Module and contract coverage is checked, not trusted}: every module under
-      \path{src/triton_tritonflow} must have \path{tests/unit/test_<module>.py}, and every contract file must have
+      \path{src/tritonflow} must have \path{tests/unit/test_<module>.py}, and every contract file must have
       \path{tests/contract/test_<name>.py}. The same checker enforces that \code{triton} is imported nowhere
       outside \code{harness/}, which is why the suite runs with no GPU, Triton or torch.
 \item \textbf{Determinism is a rule, not an aspiration}: no GPU, no network, no timing assertions, one

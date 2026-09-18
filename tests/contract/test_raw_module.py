@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from triton_tritonflow.ttir.parser import (
+from tritonflow.ttir.parser import (
     ParseDiagnostic,
     RawBlock,
     RawLoc,

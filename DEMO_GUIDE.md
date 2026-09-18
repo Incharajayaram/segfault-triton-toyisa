@@ -93,7 +93,7 @@ Before presenting:
 cd /home/bb/project/segfault
 
 # 1. Check imports
-python3 -c "import sys; sys.path.insert(0, 'src'); from triton_tritonflow.lower import lower_fixture; print('✅')"
+python3 -c "import sys; sys.path.insert(0, 'src'); from tritonflow.lower import lower_fixture; print('✅')"
 
 # 2. Check tests
 python3 -m pytest tests/ -q | tail -3
@@ -102,7 +102,7 @@ python3 -m pytest tests/ -q | tail -3
 python3 verify/run_all.py | tail -1
 
 # 4. Check PyTorch
-python3 -c "import sys; sys.path.insert(0, 'src'); from triton_tritonflow.torch_backend.compiler import tritonflow_backend; print('✅')"
+python3 -c "import sys; sys.path.insert(0, 'src'); from tritonflow.torch_backend.compiler import tritonflow_backend; print('✅')"
 
 # 5. Make executable
 chmod +x demo.py demo_quick.sh

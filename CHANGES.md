@@ -6,7 +6,7 @@ re-verified after. Two findings that could not be closed are recorded in
 
 ## The headline defect: `lower.py` was not a compiler
 
-`src/triton_tritonflow/lower.py` — the module `cli.py`, `bench/adapter.py`,
+`src/tritonflow/lower.py` — the module `cli.py`, `bench/adapter.py`,
 `verify/verify_end_to_end.py` and the contract tests all depend on — was a lookup
 table keyed on the fixture's *filename*:
 
@@ -73,7 +73,7 @@ re-costing either one would just move which of the two wins.
 
 ## Other fixes
 
-* **`cli.py` imported `triton_tritonflow.emit.serialize`, which does not exist** —
+* **`cli.py` imported `tritonflow.emit.serialize`, which does not exist** —
   `--out` crashed every time. Corrected to `emit.disasm`. The CLI was rewritten:
   a refusal is now a diagnostic with exit status 1 and named reasons, not an
   uncaught emulator traceback. Successful compiles print the parity result

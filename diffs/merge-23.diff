@@ -10,7 +10,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +## The headline defect: `lower.py` was not a compiler
 +
-+`src/triton_tritonflow/lower.py` — the module `cli.py`, `bench/adapter.py`,
++`src/tritonflow/lower.py` — the module `cli.py`, `bench/adapter.py`,
 +`verify/verify_end_to_end.py` and the contract tests all depend on — was a lookup
 +table keyed on the fixture's *filename*:
 +
@@ -77,7 +77,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +## Other fixes
 +
-+* **`cli.py` imported `triton_tritonflow.emit.serialize`, which does not exist** —
++* **`cli.py` imported `tritonflow.emit.serialize`, which does not exist** —
 +  `--out` crashed every time. Corrected to `emit.disasm`. The CLI was rewritten:
 +  a refusal is now a diagnostic with exit status 1 and named reasons, not an
 +  uncaught emulator traceback. Successful compiles print the parity result
@@ -207,7 +207,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +```bash
 +PYTHONPATH=src python3 -c "
-+from triton_tritonflow.lower import lower_fixture
++from tritonflow.lower import lower_fixture
 +c = lower_fixture('t0_vecadd', isa_name='vortex_rvgpu')
 +print('lowered:', c.fully_lowered, '| execution_error:', c.execution_error)"
 +```
@@ -235,7 +235,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +```bash
 +PYTHONPATH=src python3 -c "
-+from triton_tritonflow.lower import lower_fixture
++from tritonflow.lower import lower_fixture
 +c = lower_fixture('t2_matmul_relu', isa_name='tritonflow1')
 +print(f'err={c.parity_max_rel_err:.6g} tol={c.tolerance:.6g}')"
 +```
@@ -259,7 +259,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +**Status:** sources shipped, never built, never called.
 +
-+`src/triton_tritonflow/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
++`src/tritonflow/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
 +`precision.h`, `ir_types.h`, `errors.h`) and a top-level `CMakeLists.txt` are in
 +the tree. Nothing builds them and, until this merge, nothing could have used
 +them:
@@ -314,7 +314,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 @@ -54,6 +54,12 @@
  "tests/contract/test_torch_seam.py" = ["F401"]
  "tests/contract/test_raw_module.py" = ["F841"]
- "src/triton_tritonflow/ttir/parser.py" = ["SIM102"]
+ "src/tritonflow/ttir/parser.py" = ["SIM102"]
 +# Scripts that put the project on `sys.path` before importing from it. The
 +# imports genuinely cannot precede that, so E402 here is the rule being wrong
 +# about a standalone script rather than the script being wrong.
@@ -323,7 +323,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +"verify/verify_end_to_end.py" = ["E402"]
  
  [tool.coverage.run]
- source = ["src/triton_tritonflow"]
+ source = ["src/tritonflow"]
 diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/run_tests.py out/run_tests.py
 --- a/run_tests.py	2026-09-17 18:46:35.000000000 +0000
 +++ b/run_tests.py	2026-09-17 18:54:38.120748562 +0000
@@ -333,7 +333,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      count = suite.countTestCases()
 -    print(f"============================================================")
 +    print("============================================================")
-     print(f"  triton_tritonflow test runner (unittest) — {count} test cases")
+     print(f"  tritonflow test runner (unittest) — {count} test cases")
      print(f"  Suite: {args.suite} | Pattern: {args.pattern}")
 -    print(f"============================================================")
 +    print("============================================================")
@@ -355,9 +355,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  
      return 0 if result.wasSuccessful() else 1
  
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/cli.py out/src/triton_tritonflow/cli.py
---- a/src/triton_tritonflow/cli.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/cli.py	2026-09-17 18:54:38.121916821 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/cli.py out/src/tritonflow/cli.py
+--- a/src/tritonflow/cli.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/cli.py	2026-09-17 18:54:38.121916821 +0000
 @@ -1,48 +1,94 @@
 +"""`tritonflow` — the command-line entry point declared in `pyproject.toml`.
 +
@@ -378,13 +378,13 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  import sys
  from pathlib import Path
  
--from triton_tritonflow.lower import lower_fixture
+-from tritonflow.lower import lower_fixture
  
 +def _compile(args: argparse.Namespace) -> int:
-+    from triton_tritonflow.lower import lower_fixture
++    from tritonflow.lower import lower_fixture
  
 -def main():
--    parser = argparse.ArgumentParser(prog="triton_tritonflow")
+-    parser = argparse.ArgumentParser(prog="tritonflow")
 -    subparsers = parser.add_subparsers(dest="command")
 +    schema = Path(args.schema).stem if args.schema else "tritonflow1"
 +    try:
@@ -413,7 +413,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +            f"{verdict} derived tolerance {context.tolerance:.6g}"
 +        )
 +    if args.out and context.program is not None:
-+        from triton_tritonflow.emit.disasm import serialize
++        from tritonflow.emit.disasm import serialize
 +
 +        Path(args.out).write_text(serialize(context.program), encoding="utf-8")
 +        print(f"  wrote {args.out}")
@@ -421,7 +421,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +
 +def _extract(args: argparse.Namespace) -> int:
-+    from triton_tritonflow.harness.extract_fixtures import extract
++    from tritonflow.harness.extract_fixtures import extract
 +
 +    if args.check_gate:
 +        print("GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]")
@@ -456,7 +456,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +    if args.command == "compile":
 +        return _compile(args)
      if args.command == "extract":
--        from triton_tritonflow.harness.extract_fixtures import extract
+-        from tritonflow.harness.extract_fixtures import extract
 -        if args.check_gate:
 -            print("GPU-free extraction OK; keys [cubin,llir,ptx,source,ttgir,ttir]")
 -            return
@@ -468,7 +468,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 -            print(f"Compilation failed: {ctx.unsupported}", file=sys.stderr)
 -            sys.exit(1)
 -        if args.out and ctx.program:
--            from triton_tritonflow.emit.serialize import serialize
+-            from tritonflow.emit.serialize import serialize
 -            Path(args.out).write_text(serialize(ctx.program), encoding="utf-8")
 -            print(f"Compiled to {args.out} (cost={ctx.total_cost})")
 -        else:
@@ -484,9 +484,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  if __name__ == "__main__":
 -    main()
 +    raise SystemExit(main())
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/emit/assemble.py out/src/triton_tritonflow/emit/assemble.py
---- a/src/triton_tritonflow/emit/assemble.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/emit/assemble.py	2026-09-17 18:54:38.122988945 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/emit/assemble.py out/src/tritonflow/emit/assemble.py
+--- a/src/tritonflow/emit/assemble.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/emit/assemble.py	2026-09-17 18:54:38.122988945 +0000
 @@ -607,7 +607,7 @@
              "is not the target ISA's limitation, so it must not be reported as one"
          )
@@ -538,9 +538,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      limit = _positional_arity(selector)
      if limit is None or limit >= len(args):
          return selector(*args)
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/emu/__init__.py out/src/triton_tritonflow/emu/__init__.py
---- a/src/triton_tritonflow/emu/__init__.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/emu/__init__.py	2026-09-17 18:56:42.562770645 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/emu/__init__.py out/src/tritonflow/emu/__init__.py
+--- a/src/tritonflow/emu/__init__.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/emu/__init__.py	2026-09-17 18:56:42.562770645 +0000
 @@ -3,3 +3,19 @@
  No NumPy dtype magic is hidden here: the precision policy is explicit and
  recorded per dtype (FR-021, FR-022).
@@ -561,9 +561,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +    HAS_CPP = False
 +
 +__all__ = ["HAS_CPP"]
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/emu/exec.py out/src/triton_tritonflow/emu/exec.py
---- a/src/triton_tritonflow/emu/exec.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/emu/exec.py	2026-09-17 18:58:00.137739984 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/emu/exec.py out/src/tritonflow/emu/exec.py
+--- a/src/tritonflow/emu/exec.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/emu/exec.py	2026-09-17 18:58:00.137739984 +0000
 @@ -629,12 +629,42 @@
      policy: PrecisionPolicy | None = None,
      *,
@@ -607,9 +607,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      markers = program.markers()
      if markers:
          raise ProgramNotExecutable(markers[0])
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/isa/schema.py out/src/triton_tritonflow/isa/schema.py
---- a/src/triton_tritonflow/isa/schema.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/isa/schema.py	2026-09-17 18:54:38.124090113 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/isa/schema.py out/src/tritonflow/isa/schema.py
+--- a/src/tritonflow/isa/schema.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/isa/schema.py	2026-09-17 18:54:38.124090113 +0000
 @@ -1008,8 +1008,24 @@
      accumulate: AccumulateSpec | None = None
      tile: dict[str, int] | None = None
@@ -680,9 +680,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
          if instruction.rule not in _RULES:
              problems.append(
                  SchemaViolation(f"{path}.rule", f"{instruction.rule!r} is not one of {_RULES}")
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/isa/schemas/vortex_rvgpu.yaml out/src/triton_tritonflow/isa/schemas/vortex_rvgpu.yaml
---- a/src/triton_tritonflow/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:54:38.125212287 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/isa/schemas/vortex_rvgpu.yaml out/src/tritonflow/isa/schemas/vortex_rvgpu.yaml
+--- a/src/tritonflow/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/isa/schemas/vortex_rvgpu.yaml	2026-09-17 18:54:38.125212287 +0000
 @@ -27,6 +27,7 @@
  instructions:
    - name: LDG
@@ -754,9 +754,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      addressing: {form: register}
      time: {expr: "1.0", unit: cycle}
      cost: {expr: "0.01", unit: ctrl}
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/isa/select.py out/src/triton_tritonflow/isa/select.py
---- a/src/triton_tritonflow/isa/select.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/isa/select.py	2026-09-17 18:54:38.126344005 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/isa/select.py out/src/tritonflow/isa/select.py
+--- a/src/tritonflow/isa/select.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/isa/select.py	2026-09-17 18:54:38.126344005 +0000
 @@ -44,6 +44,7 @@
      descriptor: object,
      tile: tuple[int, ...] | None = None,
@@ -837,9 +837,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      admissible = [c for c in candidates if c.admissible and c.cost is not None]
      if not admissible:
          return SelectionReport(
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/triton_tritonflow/lower.py out/src/triton_tritonflow/lower.py
---- a/src/triton_tritonflow/lower.py	2026-09-17 18:46:35.000000000 +0000
-+++ b/src/triton_tritonflow/lower.py	2026-09-17 18:54:38.127415568 +0000
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--exclude=out.zip' '--exclude=*.pdf' zipsrc/segfault-triton-tritonflow-master/src/tritonflow/lower.py out/src/tritonflow/lower.py
+--- a/src/tritonflow/lower.py	2026-09-17 18:46:35.000000000 +0000
++++ b/src/tritonflow/lower.py	2026-09-17 18:54:38.127415568 +0000
 @@ -1,30 +1,97 @@
 -"""End-to-end compiler lowering pipeline.
 +"""End-to-end lowering: Triton IR text -> a target-ISA `Program`, then execution.
@@ -1763,7 +1763,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +    print("TEST 3: Tensor Device Transfer (documented boundary)")
 +    print("=" * 70)
 +
-+    from triton_tritonflow.torch_backend.device_interface import DATA_PLANE_GAP
++    from tritonflow.torch_backend.device_interface import DATA_PLANE_GAP
 +
 +    x = torch.tensor([1.0, 2.0, 3.0])
 +    print(f"Created tensor: {x}")
@@ -1805,15 +1805,15 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
      try:
 +        import numpy as np
 +
-         from triton_tritonflow.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
-         from triton_tritonflow.emu.exec import emulate
+         from tritonflow.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
+         from tritonflow.emu.exec import emulate
 -        import numpy as np
          
          # Create a simple program
          prog = Program(
 @@ -233,7 +239,7 @@
      try:
-         from triton_tritonflow.emit.ir import UnsupportedMarker
+         from tritonflow.emit.ir import UnsupportedMarker
          # Verify the marker class exists and can be instantiated
 -        marker = UnsupportedMarker(op_name="test", reason="test reason")
 +        UnsupportedMarker(op_name="test", reason="test reason")
@@ -1852,9 +1852,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  
  import numpy as np
  
--from triton_tritonflow.isa.schema import load_builtin
-+from triton_tritonflow.isa.schema import load_builtin, validate_schema
- from triton_tritonflow.lower import lower_fixture
+-from tritonflow.isa.schema import load_builtin
++from tritonflow.isa.schema import load_builtin, validate_schema
+ from tritonflow.lower import lower_fixture
  
 +#: Every ISA the corpus is lowered against. `lower_fixture` takes the name and
 +#: changes nothing else, which is the cross-ISA transfer claim in one line.
@@ -1951,10 +1951,10 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +    """
 +
 +    def test_load_and_store_get_different_instructions(self) -> None:
-+        from triton_tritonflow.isa.schema import load_builtin
-+        from triton_tritonflow.lower import assemble_program, launch_env
-+        from triton_tritonflow.ttir.graph import build_def_use
-+        from triton_tritonflow.ttir.to_ir import parse_module
++        from tritonflow.isa.schema import load_builtin
++        from tritonflow.lower import assemble_program, launch_env
++        from tritonflow.ttir.graph import build_def_use
++        from tritonflow.ttir.to_ir import parse_module
 +
 +        text = (Path(__file__).resolve().parents[2] / "fixtures" / "t0_vecadd.ttir").read_text()
 +        module = parse_module(text).module
@@ -1972,7 +1972,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +    def test_direction_agnostic_isa_is_unaffected(self) -> None:
 +        """tritonflow1 declares no direction, so one instruction still serves both."""
-+        from triton_tritonflow.isa.schema import load_builtin
++        from tritonflow.isa.schema import load_builtin
 +
 +        for name, instruction in load_builtin("tritonflow1").instructions.items():
 +            with self.subTest(instruction=name):
@@ -1982,8 +1982,8 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 +
 +    def test_direction_mismatch_is_recorded_as_a_rejection(self) -> None:
 +        """Not pre-filtered: the audit trail must say why STG lost a load."""
-+        from triton_tritonflow.isa.schema import load_builtin
-+        from triton_tritonflow.isa.select import enumerate_candidates
++        from tritonflow.isa.schema import load_builtin
++        from tritonflow.isa.select import enumerate_candidates
 +
 +        candidates = enumerate_candidates(
 +            load_builtin("vortex_rvgpu"), "memory", None, None, {}, "load"
@@ -2121,30 +2121,30 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  import numpy as np
 -import pytest
  
- from triton_tritonflow.emit.ir import (
+ from tritonflow.emit.ir import (
      Imm,
 @@ -17,18 +31,47 @@
- from triton_tritonflow.emu.exec import emulate
- from triton_tritonflow.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
+ from tritonflow.emu.exec import emulate
+ from tritonflow.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
  
 -if not HAS_CPP:
 -    pytest.skip("C++ backend is not installed", allow_module_level=True)
 +if HAS_CPP:  # pragma: no cover - only where the extension is built
-+    from triton_tritonflow.emu._emu_cpp import (
++    from tritonflow.emu._emu_cpp import (
 +        PrecisionPolicy as CppPrecisionPolicy,
 +    )
-+    from triton_tritonflow.emu._emu_cpp import (
++    from tritonflow.emu._emu_cpp import (
 +        ProgramNotExecutable,
 +        UnsupportedInstruction,
 +    )
-+    from triton_tritonflow.emu._emu_cpp import (
++    from tritonflow.emu._emu_cpp import (
 +        derive_tolerance as cpp_derive_tolerance,
 +    )
-+    from triton_tritonflow.emu._emu_cpp import (
++    from tritonflow.emu._emu_cpp import (
 +        tf32_truncate as cpp_tf32_truncate,
 +    )
  
--from triton_tritonflow.emu._emu_cpp import (
+-from tritonflow.emu._emu_cpp import (
 -    PrecisionPolicy as CppPrecisionPolicy,
 -    derive_tolerance as cpp_derive_tolerance,
 -    tf32_truncate as cpp_tf32_truncate,
@@ -2259,21 +2259,21 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  ROOT = Path(__file__).resolve().parent.parent
  sys.path.insert(0, str(ROOT / "src"))
  
--from triton_tritonflow.ttir.to_ir import parse_module
--from triton_tritonflow.ttir.graph import build_def_use, walk_region
--from triton_tritonflow.recognize.descriptor import describe_operation
--from triton_tritonflow.idioms.detect import annotate
--from triton_tritonflow.isa.schema import load_builtin
- from triton_tritonflow.emit.assemble import assemble
--from triton_tritonflow.emu.hardware import CoalescingUnit, BankConflictUnit
- from triton_tritonflow.emu.exec import emulate
-+from triton_tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
- from triton_tritonflow.emu.precision import PrecisionPolicy
-+from triton_tritonflow.idioms.detect import annotate
-+from triton_tritonflow.isa.schema import load_builtin
-+from triton_tritonflow.recognize.descriptor import describe_operation
-+from triton_tritonflow.ttir.graph import build_def_use, walk_region
-+from triton_tritonflow.ttir.to_ir import parse_module
+-from tritonflow.ttir.to_ir import parse_module
+-from tritonflow.ttir.graph import build_def_use, walk_region
+-from tritonflow.recognize.descriptor import describe_operation
+-from tritonflow.idioms.detect import annotate
+-from tritonflow.isa.schema import load_builtin
+ from tritonflow.emit.assemble import assemble
+-from tritonflow.emu.hardware import CoalescingUnit, BankConflictUnit
+ from tritonflow.emu.exec import emulate
++from tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
+ from tritonflow.emu.precision import PrecisionPolicy
++from tritonflow.idioms.detect import annotate
++from tritonflow.isa.schema import load_builtin
++from tritonflow.recognize.descriptor import describe_operation
++from tritonflow.ttir.graph import build_def_use, walk_region
++from tritonflow.ttir.to_ir import parse_module
  
  # Terminal styling
  CYAN = "\033[96m"
@@ -2293,9 +2293,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  ROOT = Path(__file__).resolve().parent.parent
  sys.path.insert(0, str(ROOT / "src"))
  
--from triton_tritonflow.ttir.to_ir import parse_module
- from triton_tritonflow.ttir.graph import build_def_use, walk_region
-+from triton_tritonflow.ttir.to_ir import parse_module
+-from tritonflow.ttir.to_ir import parse_module
+ from tritonflow.ttir.graph import build_def_use, walk_region
++from tritonflow.ttir.to_ir import parse_module
  
  FAILURES: list[str] = []
  
@@ -2314,10 +2314,10 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
  ROOT = Path(__file__).resolve().parent.parent
  sys.path.insert(0, str(ROOT / "src"))
  
-+from triton_tritonflow.emit.ir import Instr, Program, SsaRef  # noqa: E402
- from triton_tritonflow.emu.exec import emulate  # noqa: E402
--from triton_tritonflow.emu.precision import PrecisionPolicy  # noqa: E402
--from triton_tritonflow.emit.ir import Imm, Instr, Program, SsaRef  # noqa: E402
++from tritonflow.emit.ir import Instr, Program, SsaRef  # noqa: E402
+ from tritonflow.emu.exec import emulate  # noqa: E402
+-from tritonflow.emu.precision import PrecisionPolicy  # noqa: E402
+-from tritonflow.emit.ir import Imm, Instr, Program, SsaRef  # noqa: E402
  
  FAILURES: list[str] = []
  
@@ -2343,7 +2343,7 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 --- a/verify/verify_end_to_end.py	2026-09-17 18:46:35.000000000 +0000
 +++ b/verify/verify_end_to_end.py	2026-09-17 18:54:38.132840386 +0000
 @@ -48,7 +48,6 @@
-     from triton_tritonflow.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
+     from tritonflow.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
  
      schema = load_builtin("tritonflow1")
 -    from pathlib import Path as _P
@@ -2375,15 +2375,15 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' '--exclude=.ruff_cache' '--e
 -        except Exception as exc:  # noqa: BLE001
 +        except Exception as exc:
              # t0 assembled program carries an UNSUPPORTED marker -> halt is correct
-             from triton_tritonflow.emu.exec import ProgramNotExecutable
+             from tritonflow.emu.exec import ProgramNotExecutable
              check("A/t0: emulate either matches x+y or halts on a named refusal",
 @@ -119,8 +118,8 @@
      # ------------------------------------------------------------------ #
      print("PATH B: demo pipeline (lower.py, hardcoded per-tier tables) — reported, cross-checked")
      try:
--        from triton_tritonflow.lower import compute_reference, lower_fixture, make_inputs
-         from triton_tritonflow.emu.hardware import CoalescingUnit
-+        from triton_tritonflow.lower import lower_fixture, make_inputs
+-        from tritonflow.lower import compute_reference, lower_fixture, make_inputs
+         from tritonflow.emu.hardware import CoalescingUnit
++        from tritonflow.lower import lower_fixture, make_inputs
  
          # cross-check lower.py's coalescing stats against the unit it claims to use
          cu = CoalescingUnit(cache_line_bytes=32, warp_size=32)

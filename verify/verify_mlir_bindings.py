@@ -56,9 +56,9 @@ def main() -> int:
         print("           install the `extract` extra to run this check")
         return 0
 
-    from triton_tritonflow.extract import dynamic_extract as de
-    from triton_tritonflow.torch_backend import compiler as seam
-    from triton_tritonflow.ttir.to_ir import parse_module
+    from tritonflow.extract import dynamic_extract as de
+    from tritonflow.torch_backend import compiler as seam
+    from tritonflow.ttir.to_ir import parse_module
 
     # Measured, not assumed: the extraction must not touch device memory even when
     # a device is present. `memory_allocated` needs a CUDA context to answer, so

@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import unittest
 
-from triton_tritonflow.isa.schema import (
+from tritonflow.isa.schema import (
     IsaSchema,
     cost_of,
     evaluate,
     load_builtin,
     validate_schema,
 )
-from triton_tritonflow.recognize.descriptor import AccessDescriptor
-from triton_tritonflow.recognize.walk import SymExpr
+from tritonflow.recognize.descriptor import AccessDescriptor
+from tritonflow.recognize.walk import SymExpr
 
 
 class TestIsaSchemaContract(unittest.TestCase):

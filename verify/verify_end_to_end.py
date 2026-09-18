@@ -41,11 +41,11 @@ def main() -> int:
 
     # ------------------------------------------------------------------ #
     print("PATH A: real pipeline — parse -> build_ir -> assemble -> round-trip")
-    from triton_tritonflow.emit.disasm import deserialize, serialize
-    from triton_tritonflow.idioms.detect import annotate
-    from triton_tritonflow.isa.schema import load_builtin
-    from triton_tritonflow.ttir.graph import build_def_use
-    from triton_tritonflow.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
+    from tritonflow.emit.disasm import deserialize, serialize
+    from tritonflow.idioms.detect import annotate
+    from tritonflow.isa.schema import load_builtin
+    from tritonflow.ttir.graph import build_def_use
+    from tritonflow.ttir.to_ir import parse_module  # text -> semantic Module (both layers)
 
     schema = load_builtin("tritonflow1")
     launch = json.loads((ROOT / "fixtures" / "launch_env.json").read_text())
@@ -61,7 +61,7 @@ def main() -> int:
         try:
             annotations = annotate(module, build_def_use(module))
             graph = build_def_use(module)
-            from triton_tritonflow.emit.assemble import assemble
+            from tritonflow.emit.assemble import assemble
             # contracted signature: (module, graph, annotations, schema, env=...)
             program = assemble(module, graph, annotations, schema,
                                env=dict(launch[tier]))
@@ -94,8 +94,8 @@ def main() -> int:
 
     # execution on the assembled t0 program, if one exists
     if program is not None:
-        from triton_tritonflow.emu.exec import emulate
-        from triton_tritonflow.emu.precision import PrecisionPolicy
+        from tritonflow.emu.exec import emulate
+        from tritonflow.emu.precision import PrecisionPolicy
         rng = np.random.default_rng(24173)
         x = rng.standard_normal(1024).astype(np.float32)
         y = rng.standard_normal(1024).astype(np.float32)
@@ -110,7 +110,7 @@ def main() -> int:
                   f"max abs err={err}, buffers={list(out)}")
         except Exception as exc:
             # t0 assembled program carries an UNSUPPORTED marker -> halt is correct
-            from triton_tritonflow.emu.exec import ProgramNotExecutable
+            from tritonflow.emu.exec import ProgramNotExecutable
             check("A/t0: emulate either matches x+y or halts on a named refusal",
                   isinstance(exc, ProgramNotExecutable), True,
                   f"{type(exc).__name__}: {exc}")
@@ -118,8 +118,8 @@ def main() -> int:
     # ------------------------------------------------------------------ #
     print("PATH B: demo pipeline (lower.py, hardcoded per-tier tables) — reported, cross-checked")
     try:
-        from triton_tritonflow.emu.hardware import CoalescingUnit
-        from triton_tritonflow.lower import lower_fixture, make_inputs
+        from tritonflow.emu.hardware import CoalescingUnit
+        from tritonflow.lower import lower_fixture, make_inputs
 
         # cross-check lower.py's coalescing stats against the unit it claims to use
         cu = CoalescingUnit(cache_line_bytes=32, warp_size=32)
@@ -147,7 +147,7 @@ def main() -> int:
                 inputs = make_inputs("t1_matmul")
                 got = ctx.emu_outputs["out"]
                 # tf32 inputs: independent reference = fp64 matmul of truncated inputs
-                from triton_tritonflow.emu.precision import tf32_truncate
+                from tritonflow.emu.precision import tf32_truncate
                 a32 = tf32_truncate(inputs["a"].astype(np.float32)).astype(np.float64)
                 b32 = tf32_truncate(inputs["b"].astype(np.float32)).astype(np.float64)
                 ref = (a32 @ b32).astype(np.float32)

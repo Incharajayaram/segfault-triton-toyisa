@@ -20,15 +20,15 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_tritonflow.emit.assemble import assemble
-from triton_tritonflow.emu.exec import emulate
-from triton_tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
-from triton_tritonflow.emu.precision import PrecisionPolicy
-from triton_tritonflow.idioms.detect import annotate
-from triton_tritonflow.isa.schema import load_builtin
-from triton_tritonflow.recognize.descriptor import describe_operation
-from triton_tritonflow.ttir.graph import build_def_use, walk_region
-from triton_tritonflow.ttir.to_ir import parse_module
+from tritonflow.emit.assemble import assemble
+from tritonflow.emu.exec import emulate
+from tritonflow.emu.hardware import BankConflictUnit, CoalescingUnit
+from tritonflow.emu.precision import PrecisionPolicy
+from tritonflow.idioms.detect import annotate
+from tritonflow.isa.schema import load_builtin
+from tritonflow.recognize.descriptor import describe_operation
+from tritonflow.ttir.graph import build_def_use, walk_region
+from tritonflow.ttir.to_ir import parse_module
 
 # Terminal styling
 CYAN = "\033[96m"

@@ -17,8 +17,8 @@ import pytest
 torch = pytest.importorskip("torch")
 pytest.importorskip("triton")
 
-from triton_tritonflow.extract import dynamic_extract as de
-from triton_tritonflow.torch_backend import compiler as seam
+from tritonflow.extract import dynamic_extract as de
+from tritonflow.torch_backend import compiler as seam
 
 
 def tf32_band(reduction: int) -> float:

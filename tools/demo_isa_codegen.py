@@ -17,13 +17,13 @@ sys.path.insert(0, str(ROOT / "src"))
 import torch
 import torch._dynamo
 
-from triton_tritonflow.emit.assemble import assemble
-from triton_tritonflow.extract.dynamic_extract import extract_matmul
-from triton_tritonflow.idioms.detect import annotate
-from triton_tritonflow.isa.schema import load_builtin
-from triton_tritonflow.torch_backend.compiler import tritonflow_backend
-from triton_tritonflow.ttir.graph import build_def_use
-from triton_tritonflow.ttir.to_ir import parse_module
+from tritonflow.emit.assemble import assemble
+from tritonflow.extract.dynamic_extract import extract_matmul
+from tritonflow.idioms.detect import annotate
+from tritonflow.isa.schema import load_builtin
+from tritonflow.torch_backend.compiler import tritonflow_backend
+from tritonflow.ttir.graph import build_def_use
+from tritonflow.ttir.to_ir import parse_module
 
 # ANSI Colors
 CYAN = "\033[96m"

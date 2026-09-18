@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone test runner for triton_tritonflow.
+"""Standalone test runner for tritonflow.
 
 Runs all tests using Python standard library unittest.
 Zero dependency on pytest or third-party test frameworks.
@@ -54,7 +54,7 @@ def build_suite(suite_name: str | None = None, pattern: str = "test_*.py") -> un
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="triton_tritonflow test runner (unittest)")
+    parser = argparse.ArgumentParser(description="tritonflow test runner (unittest)")
     parser.add_argument("--suite", choices=["all", "unit", "contract", "integration", "e2e"], default="all")
     parser.add_argument("-v", "--verbose", action="store_true", default=True, help="verbose output")
     parser.add_argument("-k", "--pattern", default="test_*.py", help="test file pattern")
@@ -65,7 +65,7 @@ def main() -> int:
 
     count = suite.countTestCases()
     print("============================================================")
-    print(f"  triton_tritonflow test runner (unittest) — {count} test cases")
+    print(f"  tritonflow test runner (unittest) — {count} test cases")
     print(f"  Suite: {args.suite} | Pattern: {args.pattern}")
     print("============================================================")
 

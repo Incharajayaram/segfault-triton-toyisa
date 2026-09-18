@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import unittest
 
-from triton_tritonflow.emit.disasm import deserialize, disassemble, serialize
-from triton_tritonflow.emit.ir import (
+from tritonflow.emit.disasm import deserialize, disassemble, serialize
+from tritonflow.emit.ir import (
     Imm,
     Instr,
     Loop,

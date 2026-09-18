@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from triton_tritonflow.emit.ir import (
+from tritonflow.emit.ir import (
     Imm,
     Instr,
     Loop,
@@ -13,25 +13,25 @@ from triton_tritonflow.emit.ir import (
     SsaRef,
     UnsupportedMarker,
 )
-from triton_tritonflow.emu import HAS_CPP
-from triton_tritonflow.emu.exec import emulate
-from triton_tritonflow.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
+from tritonflow.emu import HAS_CPP
+from tritonflow.emu.exec import emulate
+from tritonflow.emu.precision import PrecisionPolicy, derive_tolerance, tf32_truncate
 
 if not HAS_CPP:
     import unittest
     raise unittest.SkipTest("C++ backend is not installed")
 
-from triton_tritonflow.emu._emu_cpp import (
+from tritonflow.emu._emu_cpp import (
     PrecisionPolicy as CppPrecisionPolicy,
 )
-from triton_tritonflow.emu._emu_cpp import (
+from tritonflow.emu._emu_cpp import (
     ProgramNotExecutable,
     UnsupportedInstruction,
 )
-from triton_tritonflow.emu._emu_cpp import (
+from tritonflow.emu._emu_cpp import (
     derive_tolerance as cpp_derive_tolerance,
 )
-from triton_tritonflow.emu._emu_cpp import (
+from tritonflow.emu._emu_cpp import (
     tf32_truncate as cpp_tf32_truncate,
 )
 

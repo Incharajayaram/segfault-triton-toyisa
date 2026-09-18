@@ -17,16 +17,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_tritonflow.diagnostics import (
+from tritonflow.diagnostics import (
     diagnose_unsupported_op,
 )
-from triton_tritonflow.report.coverage import (
+from tritonflow.report.coverage import (
     CoverageReport,
     UnsupportedOp,
     coverage_report,
     render_markdown,
 )
-from triton_tritonflow.report.transfer import (
+from tritonflow.report.transfer import (
     Edit,
     TransferReport,
     limitations_document,
@@ -101,8 +101,8 @@ def test_transfer_reporting() -> None:
         {"isa_name": "tritonflow2", "tier_name": "t0_vecadd", "total_cost": 7374.0},
     ]
     edits = [
-        Edit(path="src/triton_tritonflow/isa/schemas/tritonflow2.yaml", lines_changed=96, reason="Target schema definition"),
-        Edit(path="src/triton_tritonflow/isa/rules/tritonflow2.py", lines_changed=48, reason="Target rules definition"),
+        Edit(path="src/tritonflow/isa/schemas/tritonflow2.yaml", lines_changed=96, reason="Target schema definition"),
+        Edit(path="src/tritonflow/isa/rules/tritonflow2.py", lines_changed=48, reason="Target rules definition"),
     ]
     treport = transfer_report(runs, edits=edits, baseline_isa="tritonflow1", target_isa="tritonflow2")
     assert isinstance(treport, TransferReport), "Must return TransferReport"

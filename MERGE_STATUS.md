@@ -16,7 +16,7 @@
 The current repository includes several enhancements not present in the merge source:
 
 ### 1. C++ Emulator Backend
-- `src/triton_tritonflow/emu/cpp/` - Complete C++ implementation
+- `src/tritonflow/emu/cpp/` - Complete C++ implementation
   - `bindings.cpp` - Python bindings via pybind11
   - `machine.cpp` / `machine.h` - Core emulator logic
   - `precision.h` - Precision handling
@@ -37,9 +37,9 @@ The current repository includes several enhancements not present in the merge so
 - `merge_comparison.py` - This merge comparison script
 
 ### 4. Additional Implementation Files
-- `src/triton_tritonflow/emu/hardware.py` - Hardware abstraction layer
-- `src/triton_tritonflow/lower.py` - Lowering utilities
-- `src/triton_tritonflow/isa/schemas/vortex_rvgpu.yaml` - Vortex RISC-V GPU ISA schema
+- `src/tritonflow/emu/hardware.py` - Hardware abstraction layer
+- `src/tritonflow/lower.py` - Lowering utilities
+- `src/tritonflow/isa/schemas/vortex_rvgpu.yaml` - Vortex RISC-V GPU ISA schema
 - `fixtures/launch_env.json` - Launch environment configuration
 
 ### 5. Verification Scripts

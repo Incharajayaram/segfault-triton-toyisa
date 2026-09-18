@@ -36,12 +36,12 @@ from __future__ import annotations
 import torch
 
 # The package deliberately imports nothing at package level (it must stay
-# importable with torch absent -- see triton_tritonflow/__init__.py), so the
+# importable with torch absent -- see tritonflow/__init__.py), so the
 # @register_backend("tritonflow") decorator in torch_backend/compiler.py only
 # runs once this module is actually imported. Without this import,
 # torch.compile(..., backend="tritonflow") raises InvalidBackend.
-from triton_tritonflow.emu import HAS_CPP
-from triton_tritonflow.torch_backend.compiler import tritonflow_backend
+from tritonflow.emu import HAS_CPP
+from tritonflow.torch_backend.compiler import tritonflow_backend
 
 
 def main() -> None:

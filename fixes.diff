@@ -26,21 +26,21 @@ index bec6873..c2f9a90 100644
  # The only extra that needs Triton or torch. Kept separate so the test suite
 @@ -29,8 +34,26 @@ seam = [
  [project.scripts]
- tritonflow = "triton_tritonflow.cli:main"
+ tritonflow = "tritonflow.cli:main"
  
 -[tool.setuptools.packages.find]
 -where = ["src"]
 +[tool.scikit-build]
-+wheel.packages = ["src/triton_tritonflow"]
++wheel.packages = ["src/tritonflow"]
 +# Explicit rather than relying on scikit-build-core's git-tracked-files default:
 +# this repo is also distributed as a plain tarball (no `.git`), and the CMake
 +# build needs these sources to be in the sdist regardless of VCS presence.
 +sdist.include = [
 +  "CMakeLists.txt",
-+  "src/triton_tritonflow/emu/cpp/*.cpp",
-+  "src/triton_tritonflow/emu/cpp/*.h",
-+  "src/triton_tritonflow/emu/cpp/CMakeLists.txt",
-+  "src/triton_tritonflow/torch_backend/kernels/*.ttir",
++  "src/tritonflow/emu/cpp/*.cpp",
++  "src/tritonflow/emu/cpp/*.h",
++  "src/tritonflow/emu/cpp/CMakeLists.txt",
++  "src/tritonflow/torch_backend/kernels/*.ttir",
 +]
 +sdist.exclude = [
 +  "build",
@@ -53,11 +53,11 @@ index bec6873..c2f9a90 100644
  
  [tool.ruff]
  line-length = 100
-diff --git a/src/triton_tritonflow/torch_backend/kernels/matmul_128x128x64.ttir b/src/triton_tritonflow/torch_backend/kernels/matmul_128x128x64.ttir
+diff --git a/src/tritonflow/torch_backend/kernels/matmul_128x128x64.ttir b/src/tritonflow/torch_backend/kernels/matmul_128x128x64.ttir
 new file mode 100644
 index 0000000..0dea424
 --- /dev/null
-+++ b/src/triton_tritonflow/torch_backend/kernels/matmul_128x128x64.ttir
++++ b/src/tritonflow/torch_backend/kernels/matmul_128x128x64.ttir
 @@ -0,0 +1,160 @@
 +#loc = loc("LOCFILE":31:0)
 +#loc42 = loc("a_ptr"(#loc))
@@ -263,12 +263,12 @@ index 0000000..5b1c648
 +import torch
 +
 +# The package deliberately imports nothing at package level (it must stay
-+# importable with torch absent -- see triton_tritonflow/__init__.py), so the
++# importable with torch absent -- see tritonflow/__init__.py), so the
 +# @register_backend("tritonflow") decorator in torch_backend/compiler.py only
 +# runs once this module is actually imported. Without this import,
 +# torch.compile(..., backend="tritonflow") raises InvalidBackend.
-+from triton_tritonflow.emu import HAS_CPP
-+from triton_tritonflow.torch_backend.compiler import tritonflow_backend
++from tritonflow.emu import HAS_CPP
++from tritonflow.torch_backend.compiler import tritonflow_backend
 +
 +
 +def main() -> None:

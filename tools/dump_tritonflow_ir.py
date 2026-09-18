@@ -15,7 +15,7 @@ from pathlib import Path
 
 import torch
 
-from triton_tritonflow.emu import HAS_CPP
+from tritonflow.emu import HAS_CPP
 
 OUTPUT = Path("tritonflow_generated.txt")
 

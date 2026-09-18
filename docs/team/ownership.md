@@ -3,7 +3,7 @@
 The team has a parsing specialist and an IR specialist. That is the best possible starting position, because
 the critical path's first link — the front end — was the one single-person bottleneck. It becomes two halves
 the moment there is a frozen seam between them: **`RawModule`**
-(`specs/001-triton-to-toy-isa/contracts/raw-module.md`, written for exactly this reason).
+(`specs/001-triton-to-tritonflow/contracts/raw-module.md`, written for exactly this reason).
 
 ## The four owners
 

@@ -10,19 +10,19 @@ import unittest
 
 import numpy as np
 
-from triton_tritonflow.emit.ir import (
+from tritonflow.emit.ir import (
     Instr,
     MemRef,
     Program,
     SourceRef,
     UnsupportedMarker,
 )
-from triton_tritonflow.emu.exec import (
+from tritonflow.emu.exec import (
     MissingInput,
     ProgramNotExecutable,
     emulate,
 )
-from triton_tritonflow.emu.precision import (
+from tritonflow.emu.precision import (
     derive_tolerance,
     tf32_truncate,
 )

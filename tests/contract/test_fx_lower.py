@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover - torch is an optional extra
     HAS_TORCH = False
 
 if HAS_TORCH:
-    from triton_tritonflow.torch_backend.fx_lower import (
+    from tritonflow.torch_backend.fx_lower import (
         lower_fx_graph,
         supported_targets,
         try_lower_and_run,
@@ -128,7 +128,7 @@ class TestFxLowering(unittest.TestCase):
 @unittest.skipUnless(HAS_TORCH, "torch is not installed")
 class TestBackendIntegration(unittest.TestCase):
     def test_torch_compile_uses_the_fx_path(self) -> None:
-        from triton_tritonflow.torch_backend.compiler import tritonflow_backend
+        from tritonflow.torch_backend.compiler import tritonflow_backend
 
         def fn(a, b):
             return torch.relu(a + b)
@@ -142,7 +142,7 @@ class TestBackendIntegration(unittest.TestCase):
         self.assertLess(float((torch.as_tensor(out) - fn(*xs)).abs().max()), 1e-6)
 
     def test_unsupported_graph_falls_back_and_records_why(self) -> None:
-        from triton_tritonflow.torch_backend.compiler import tritonflow_backend
+        from tritonflow.torch_backend.compiler import tritonflow_backend
 
         def fn(a, b):
             return torch.sigmoid(a + b)

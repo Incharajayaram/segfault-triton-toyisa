@@ -26,5 +26,5 @@
 
 ## Edits Outside Schemas and Rules
 
-- `src/triton_tritonflow/isa/schemas/tritonflow2.yaml` (96 lines): Banked scratchpad target schema
-- `src/triton_tritonflow/isa/rules/tritonflow2.py` (48 lines): Custom lowering rules
+- `src/tritonflow/isa/schemas/tritonflow2.yaml` (96 lines): Banked scratchpad target schema
+- `src/tritonflow/isa/rules/tritonflow2.py` (48 lines): Custom lowering rules

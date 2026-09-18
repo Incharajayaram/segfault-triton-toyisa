@@ -9,14 +9,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from triton_tritonflow.report.coverage import (
+from tritonflow.report.coverage import (
     CoverageReport,
     TierCoverage,
     UnsupportedOp,
     coverage_report,
     render_markdown,
 )
-from triton_tritonflow.report.transfer import (
+from tritonflow.report.transfer import (
     Edit,
     TransferReport,
     limitations_document,

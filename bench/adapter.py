@@ -68,7 +68,7 @@ def make_inputs(tier: str, seed: int = SEED) -> dict[str, np.ndarray]:
 def lower_fixture(tier: str) -> RunContext | None:
     """Run the real pipeline on one frozen fixture."""
     try:
-        from triton_tritonflow.lower import lower_fixture as _lower
+        from tritonflow.lower import lower_fixture as _lower
         return _lower(tier)
     except Exception:
         return None

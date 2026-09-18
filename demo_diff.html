@@ -426,8 +426,8 @@
         <label for="target-isa">Target ISA:</label>
         <select id="target-isa" onchange="switchTarget(this.value)">
           <option value="vortex_rvgpu">VORTEX_RVGPU (RISC-V SIMT GPGPU)</option>
-          <option value="tritonflow2">TOYISA2 (Banked Scratchpad ASIC)</option>
-          <option value="tritonflow1">TOYISA1 (Systolic Array Accelerator)</option>
+          <option value="tritonflow2">TRITONFLOW2 (Banked Scratchpad ASIC)</option>
+          <option value="tritonflow1">TRITONFLOW1 (Systolic Array Accelerator)</option>
         </select>
       </div>
       <button class="btn-action" onclick="runInteractiveDemo()">Re-Run Trace</button>
@@ -523,9 +523,9 @@ def model(A, B):
   <!-- TAB 3: 3-WAY ARCHITECTURE COMPARISON -->
   <div id="tab-matrix" class="tab-content">
     <div class="isa-matrix-grid">
-      <!-- TOYISA1 -->
+      <!-- TRITONFLOW1 -->
       <div class="isa-card" id="card-tritonflow1">
-        <span class="isa-badge badge-tritonflow1">TOYISA1: Systolic Array</span>
+        <span class="isa-badge badge-tritonflow1">TRITONFLOW1: Systolic Array</span>
         <h3>Flat Systolic ASIC</h3>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Fixed 16×16 systolic array without cache or memory coalescing.</p>
         <div class="isa-stat-row"><span class="isa-stat-label">Memory Engine</span><span class="isa-stat-val">DMA1D / DMA2D (Flat)</span></div>
@@ -536,9 +536,9 @@ def model(A, B):
         <div class="isa-stat-row" style="color: #38bdf8;"><span class="isa-stat-label">Total Kernel Cost</span><span class="isa-stat-val">35,772.9 cycles</span></div>
       </div>
 
-      <!-- TOYISA2 -->
+      <!-- TRITONFLOW2 -->
       <div class="isa-card" id="card-tritonflow2">
-        <span class="isa-badge badge-tritonflow2">TOYISA2: Banked Memory</span>
+        <span class="isa-badge badge-tritonflow2">TRITONFLOW2: Banked Memory</span>
         <h3>Multi-Bank Domain ASIC</h3>
         <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">16-bank interleaved scratchpad memory with outer product engine.</p>
         <div class="isa-stat-row"><span class="isa-stat-label">Memory Engine</span><span class="isa-stat-val">LDG (16 Banks Interleaved)</span></div>
@@ -637,7 +637,7 @@ def model(A, B):
       ]
     },
     tritonflow2: {
-      name: "TOYISA2",
+      name: "TRITONFLOW2",
       desc: "Multi-Banked Scratchpad ASIC",
       cost: "28402.0 cycles",
       rows: [
@@ -652,7 +652,7 @@ def model(A, B):
       ]
     },
     tritonflow1: {
-      name: "TOYISA1",
+      name: "TRITONFLOW1",
       desc: "Systolic Array Accelerator",
       cost: "35772.9 cycles",
       rows: [

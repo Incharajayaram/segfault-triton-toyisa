@@ -25,10 +25,10 @@ torch = pytest.importorskip("torch")
 triton = pytest.importorskip("triton")
 tl = pytest.importorskip("triton.language")
 
-from triton_tritonflow.emu.exec import UnsupportedInstruction
-from triton_tritonflow.extract import dynamic_extract as de
-from triton_tritonflow.extract import flaggems_bridge as fg
-from triton_tritonflow.torch_backend import compiler as seam
+from tritonflow.emu.exec import UnsupportedInstruction
+from tritonflow.extract import dynamic_extract as de
+from tritonflow.extract import flaggems_bridge as fg
+from tritonflow.torch_backend import compiler as seam
 
 ADD_BAND = 1e-6
 
@@ -209,7 +209,7 @@ def test_a_bridged_op_the_machine_cannot_execute_falls_back_with_a_record(
     has no case for `math.exp`. The seam must record that as an execution refusal
     and run the graph in PyTorch — not raise at the caller and not claim success.
     """
-    from triton_tritonflow.extract import flaggems_bridge as bridge
+    from tritonflow.extract import flaggems_bridge as bridge
 
     extracted = bridge.extract_for_op("sigmoid", [(8, 8)])
     assert extracted is not None

@@ -24,8 +24,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_tritonflow.emit.ir import Instr, Program, SsaRef
-from triton_tritonflow.emu.exec import emulate
+from tritonflow.emit.ir import Instr, Program, SsaRef
+from tritonflow.emu.exec import emulate
 
 FAILURES: list[str] = []
 
@@ -40,7 +40,7 @@ def check(name, actual, expected, context=""):
 
 
 def main() -> int:
-    from triton_tritonflow.emu.precision import derive_tolerance, tf32_truncate
+    from tritonflow.emu.precision import derive_tolerance, tf32_truncate
 
     print("E1/E2: tf32 truncation (independent bit math: 10 mantissa bits kept)")
     # 1.0, 2.0, 0.5 are powers of two — tf32 must preserve them exactly
@@ -91,7 +91,7 @@ def main() -> int:
               f"{type(exc).__name__}: {exc}")
 
     print("E6: UNSUPPORTED marker halts execution (FR-005, postcondition 2)")
-    from triton_tritonflow.emit.ir import UnsupportedMarker
+    from tritonflow.emit.ir import UnsupportedMarker
 
     prog2 = Program(
         isa_name="tritonflow1", schema_version=1, kernel_name="k2", total_cost=0.0,

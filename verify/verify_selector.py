@@ -21,9 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from triton_tritonflow.isa.schema import load_builtin
-from triton_tritonflow.isa.select import enumerate_candidates, select
-from triton_tritonflow.recognize.descriptor import AccessDescriptor
+from tritonflow.isa.schema import load_builtin
+from tritonflow.isa.select import enumerate_candidates, select
+from tritonflow.recognize.descriptor import AccessDescriptor
 
 FAILURES: list[str] = []
 

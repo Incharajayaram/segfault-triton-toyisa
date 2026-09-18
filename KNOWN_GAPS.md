@@ -66,7 +66,7 @@ Reproduce:
 
 ```bash
 PYTHONPATH=src python3 -c "
-from triton_tritonflow.lower import lower_fixture
+from tritonflow.lower import lower_fixture
 c = lower_fixture('t0_vecadd', isa_name='vortex_rvgpu')
 print('lowered:', c.fully_lowered, '| execution_error:', c.execution_error)"
 ```
@@ -94,7 +94,7 @@ Reproduce:
 
 ```bash
 PYTHONPATH=src python3 -c "
-from triton_tritonflow.lower import lower_fixture
+from tritonflow.lower import lower_fixture
 c = lower_fixture('t2_matmul_relu', isa_name='tritonflow1')
 print(f'err={c.parity_max_rel_err:.6g} tol={c.tolerance:.6g}')"
 ```
@@ -118,7 +118,7 @@ the test suite is CPU-only and reproducible offline.
 
 **Status:** sources shipped, never built, never called.
 
-`src/triton_tritonflow/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
+`src/tritonflow/emu/cpp/` (six files: `machine.cpp/.h`, `bindings.cpp`,
 `precision.h`, `ir_types.h`, `errors.h`) and a top-level `CMakeLists.txt` are in
 the tree. Nothing builds them and, until this merge, nothing could have used
 them:

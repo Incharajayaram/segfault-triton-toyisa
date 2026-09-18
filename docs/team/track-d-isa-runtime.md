@@ -15,16 +15,16 @@ The largest track, and the one with the two things that make the project mean an
 ## You own
 
 ```
-src/triton_tritonflow/isa/schema.py             IsaSchema, Instruction, load_schema, validate_schema, evaluate, cost_of
-src/triton_tritonflow/isa/select.py             Candidate, SelectionReport, enumerate_candidates, select, oracle_min
-src/triton_tritonflow/isa/rules/tritonflow1.py      ISA_RULES
-src/triton_tritonflow/isa/rules/tritonflow2.py      ISA_RULES (authored independently — see day 4)
-src/triton_tritonflow/isa/schemas/*.yaml
-src/triton_tritonflow/torch_backend/compiler.py           tritonflow_backend, extract_ttir, lower_and_run, fallback
-src/triton_tritonflow/torch_backend/device_interface.py   ToyIsaInterface, register_interface
-src/triton_tritonflow/torch_backend/device.py             ToyDevice, DevicePtr
-src/triton_tritonflow/emu/exec.py                         emulate, apply, ProgramNotExecutable, ShapeMismatch
-src/triton_tritonflow/emu/precision.py                    PrecisionPolicy, derive_tolerance, tf32_truncate, accumulate, compare
+src/tritonflow/isa/schema.py             IsaSchema, Instruction, load_schema, validate_schema, evaluate, cost_of
+src/tritonflow/isa/select.py             Candidate, SelectionReport, enumerate_candidates, select, oracle_min
+src/tritonflow/isa/rules/tritonflow1.py      ISA_RULES
+src/tritonflow/isa/rules/tritonflow2.py      ISA_RULES (authored independently — see day 4)
+src/tritonflow/isa/schemas/*.yaml
+src/tritonflow/torch_backend/compiler.py           tritonflow_backend, extract_ttir, lower_and_run, fallback
+src/tritonflow/torch_backend/device_interface.py   TritonFlowInterface, register_interface
+src/tritonflow/torch_backend/device.py             ToyDevice, DevicePtr
+src/tritonflow/emu/exec.py                         emulate, apply, ProgramNotExecutable, ShapeMismatch
+src/tritonflow/emu/precision.py                    PrecisionPolicy, derive_tolerance, tf32_truncate, accumulate, compare
 ```
 
 **Your contracts**: `contracts/isa-schema.md`, `contracts/selector.md`, `contracts/torch-seam.md`,
@@ -45,7 +45,7 @@ produce a result nobody can argue with on day 1. Order:
    `cost_of` (zero-dimension guard), `select`/`enumerate_candidates`.
 2. **Test the selector with hand-built descriptors.** A descriptor is a plain dataclass; C freezes it at lunch.
    You can prove a 64×64×32 tile picks `MAC16` over `MAC8` before the parser exists.
-3. **The smoke test.** `register_backend` + `ToyIsaInterface` + `ToyDevice` + a hard-coded 64×64 matmul
+3. **The smoke test.** `register_backend` + `TritonFlowInterface` + `ToyDevice` + a hard-coded 64×64 matmul
    lowering. Template in-tree:
    `test/cpp_extensions/open_registration_extension/torch_openreg/torch_openreg/compiler.py`. ~10 lines of
    registration against a documented API.

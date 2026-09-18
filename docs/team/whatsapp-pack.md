@@ -153,8 +153,8 @@ GROUND RULES THAT AREN'T OBVIOUS
 ## Message 3 — the reading list (group, attach the seven files)
 
 Attach: `docs/team/kickoff.md`, `docs/team/testing-ci.md`,
-`specs/001-triton-to-toy-isa/spec.md`, `specs/001-triton-to-toy-isa/plan.md`,
-`specs/001-triton-to-toy-isa/tasks.md`, `specs/001-triton-to-toy-isa/research.md`,
+`specs/001-triton-to-tritonflow/spec.md`, `specs/001-triton-to-tritonflow/plan.md`,
+`specs/001-triton-to-tritonflow/tasks.md`, `specs/001-triton-to-tritonflow/research.md`,
 and the `Makefile` pasted as text.
 
 ```text
@@ -265,7 +265,7 @@ before sending, or they will never be opened:
 
 ## File reference table
 
-*`specs/.../` below is shorthand for `specs/001-triton-to-toy-isa/`.*
+*`specs/.../` below is shorthand for `specs/001-triton-to-tritonflow/`.*
 
 | File | Send to | Format | Size | Purpose |
 |---|---|---|---|---|

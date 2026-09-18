@@ -9,7 +9,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from triton_tritonflow.ttir.parser import parse_raw
+from tritonflow.ttir.parser import parse_raw
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent.parent / "fixtures"
 

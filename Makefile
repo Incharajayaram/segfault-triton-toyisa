@@ -18,7 +18,7 @@ bootstrap: ## install dev deps (ruff) — needs no Triton, no torch, no GPU
 	$(PY) -m pip install -e '.[dev]'
 
 fixtures: ## regenerate fixtures/raw with Triton (manual, reviewed; see VERSIONS.txt)
-	$(PY) src/triton_tritonflow/harness/extract_fixtures.py --out fixtures/raw
+	$(PY) src/tritonflow/harness/extract_fixtures.py --out fixtures/raw
 	$(MAKE) golden
 
 golden: ## re-derive the observations block of fixtures/GOLDEN.json

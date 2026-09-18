@@ -3,7 +3,7 @@
 
 Three laws, one per check:
 
-  1. every module under src/triton_tritonflow/ has tests/unit/test_<module>.py
+  1. every module under src/tritonflow/ has tests/unit/test_<module>.py
   2. every contract in specs/.../contracts/ has tests/contract/test_<stem>.py
   3. no module imports triton or torch outside harness/ and torch_backend/
 
@@ -23,8 +23,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src" / "triton_tritonflow"
-CONTRACTS = ROOT / "specs" / "001-triton-to-toy-isa" / "contracts"
+SRC = ROOT / "src" / "tritonflow"
+CONTRACTS = ROOT / "specs" / "001-triton-to-tritonflow" / "contracts"
 UNIT = ROOT / "tests" / "unit"
 CONTRACT_TESTS = ROOT / "tests" / "contract"
 

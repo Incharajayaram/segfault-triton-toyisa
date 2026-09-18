@@ -16,7 +16,7 @@ def test_device_registration():
     print("TEST 1: Device Registration")
     print("=" * 70)
     
-    from triton_tritonflow.torch_backend.compiler import verify_device
+    from tritonflow.torch_backend.compiler import verify_device
     result = verify_device()
     
     # Check all the requirements
@@ -44,13 +44,13 @@ def test_device_visibility():
     print("TEST 2: Device Visibility (SC-001)")
     print("=" * 70)
     
-    from triton_tritonflow.torch_backend.device_interface import ToyIsaInterface
+    from tritonflow.torch_backend.device_interface import TritonFlowInterface
     
     try:
         # Test device_count, is_available, current_device
-        count = ToyIsaInterface.device_count()
-        available = ToyIsaInterface.is_available()
-        current = ToyIsaInterface.current_device()
+        count = TritonFlowInterface.device_count()
+        available = TritonFlowInterface.is_available()
+        current = TritonFlowInterface.current_device()
         
         checks = {
             "device_count() >= 1": count >= 1,
@@ -81,8 +81,8 @@ def test_tensor_to_device():
     print("=" * 70)
     
     try:
-        from triton_tritonflow.torch_backend.device import ToyDevice
-        from triton_tritonflow.torch_backend.device_interface import DATA_PLANE_GAP
+        from tritonflow.torch_backend.device import ToyDevice
+        from tritonflow.torch_backend.device_interface import DATA_PLANE_GAP
         
         x = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32)
         print(f"Created tensor: {x}")
@@ -149,7 +149,7 @@ def test_recorded_kernels():
     print("TEST 5: Recorded Kernels")
     print("=" * 70)
     
-    from triton_tritonflow.torch_backend.compiler import recorded_kernels
+    from tritonflow.torch_backend.compiler import recorded_kernels
     
     kernels = recorded_kernels()
     print(f"Recorded kernels: {list(kernels.keys())}")
@@ -175,8 +175,8 @@ def test_emulator_basic():
     try:
         import numpy as np
 
-        from triton_tritonflow.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
-        from triton_tritonflow.emu.exec import emulate
+        from tritonflow.emit.ir import Instr, MemRef, Program, SourceRef, SsaRef
+        from tritonflow.emu.exec import emulate
         
         # Create a simple program
         prog = Program(
@@ -232,7 +232,7 @@ def test_mvp_requirements():
     
     # CHK035: The seam is the artifact of record and is proven before the pipeline is wired to it
     try:
-        from triton_tritonflow.torch_backend.compiler import verify_device
+        from tritonflow.torch_backend.compiler import verify_device
         result = verify_device()
         results["CHK035 - Seam proven"] = result["registered_backend"] and result["is_available"]
     except Exception as e:
@@ -245,7 +245,7 @@ def test_mvp_requirements():
     
     # CHK006: The failure route for unparseable input is explicitly handled
     try:
-        from triton_tritonflow.emit.ir import UnsupportedMarker
+        from tritonflow.emit.ir import UnsupportedMarker
         # Verify the marker class exists and can be instantiated
         UnsupportedMarker(op_name="test", reason="test reason")
         results["CHK006 - Failure route exists"] = True
